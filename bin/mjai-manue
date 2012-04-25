@@ -1,0 +1,9 @@
+#!/usr/bin/env ruby
+
+require "rubygems"
+require "bundler/setup"
+
+require "mjai/manue/mjai_manue_command"
+
+
+Mjai::Manue::MjaiManueCommand.execute(ARGV)
