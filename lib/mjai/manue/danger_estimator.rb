@@ -2,7 +2,6 @@
 
 require "set"
 require "optparse"
-require "with_progress"
 
 require "mjai/pai"
 

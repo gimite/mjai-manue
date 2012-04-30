@@ -84,7 +84,7 @@ module Mjai
               
               max_score = @evals.values.map(){ |e| e.score }.max
               @best_dahais = @evals.keys.select(){ |pai| @evals[pai].score == max_score }
-              @best_dahai = @best_dahais.sample
+              @best_dahai = @best_dahais[rand(@best_dahais.size)]
               
             end
             

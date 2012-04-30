@@ -2,8 +2,6 @@
 
 require "set"
 
-require "with_progress"
-
 require "mjai/archive"
 require "mjai/shanten_analysis"
 
