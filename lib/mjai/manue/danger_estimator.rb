@@ -4,6 +4,7 @@ require "set"
 require "optparse"
 
 require "mjai/pai"
+require "mjai/archive"
 
 
 module Mjai
@@ -46,35 +47,37 @@ module Mjai
               return @@feature_names
             end
             
-            def initialize(game, me, dapai, reacher, prereach_sutehais)
+            def initialize(params)
               
-              @game = game
-              @dapai = dapai
-              @me = me
-              @reacher = reacher
-              @prereach_sutehais = prereach_sutehais
+              if params[:game]
+                params = params.dup()
+                # Adds params[:dapai] because the game object points to the scene after the dapai.
+                params[:tehais] = params[:me].tehais + (params[:dapai] ? [params[:dapai]] : [])
+                params[:anpais] = reacher.anpais
+                params[:doras] = @game.doras
+                params[:bakaze] = @game.bakaze
+                params[:reacher_kaze] = @reacher.jikaze
+                params[:visible] = []
+                params[:visible] += @game.doras
+                params[:visible] += @me.tehais
+                for player in @game.players
+                  params[:visible] += player.ho + player.furos.map(){ |f| f.pais }.flatten()
+                end
+              end
               
-              tehais = @me.tehais.dup()
-              tehais.push(@dapai) if @dapai
-              @anpai_set = to_pai_set(reacher.anpais)
+              @prereach_sutehais = params[:prereach_sutehais]
+              @tehai_set = to_pai_set(params[:tehais])
+              @anpai_set = to_pai_set(params[:anpais])
+              @visible_set = to_pai_set(params[:visible])
+              @dora_set = to_pai_set(params[:doras])
+              @bakaze = params[:bakaze]
+              @reacher_kaze = params[:reacher_kaze]
+              
               @prereach_sutehai_set = to_pai_set(@prereach_sutehais)
               @early_sutehai_set = to_pai_set(@prereach_sutehais[0...(@prereach_sutehais.size / 2)])
               @late_sutehai_set = to_pai_set(@prereach_sutehais[(@prereach_sutehais.size / 2)..-1])
-              @dora_set = to_pai_set(@game.doras)
-              @tehai_set = to_pai_set(tehais)
               
-              visible = []
-              visible += @game.doras
-              visible += @me.tehais
-              for player in @game.players
-                visible += player.ho + player.furos.map(){ |f| f.pais }.flatten()
-              end
-              @visible_set = to_pai_set(visible)
-              
-              @candidates = tehais.
-                  map(){ |pai| pai.remove_red() }.
-                  uniq().
-                  select(){ |pai| !@anpai_set.has_key?(pai) }
+              @candidates = @tehai_set.keys.select(){ |pai| !@anpai_set.has_key?(pai) }
               
             end
             
@@ -116,15 +119,13 @@ module Mjai
               return suji_of(pai, @anpai_set)
             end
             
+            # リーチ牌の筋。1pリーチに対する4pなども含む。
             define_feature("reach_suji") do |pai|
               reach_pai = @prereach_sutehais[-1].remove_red()
-              if pai.type == "t" || reach_pai.type != pai.type || pai.number == 1 || pai.number == 9
+              if pai.type == "t" || reach_pai.type != pai.type
                 return false
               else
-                suji_numbers = get_suji_numbers(pai)
-                return suji_numbers.all?(){ |n| @prereach_sutehai_set.include?(Pai.new(pai.type, n)) } &&
-                    suji_numbers.include?(reach_pai.number) &&
-                    @prereach_sutehai_set[reach_pai] == 1
+                return get_suji_numbers(pai).include?(reach_pai.number)
               end
             end
             
@@ -277,11 +278,11 @@ module Mjai
             end
             
             define_feature("bakaze") do |pai|
-              return pai == @game.bakaze
+              return pai == @bakaze
             end
             
             define_feature("jikaze") do |pai|
-              return pai == @reacher.jikaze
+              return pai == @reacher_kaze
             end
             
             def n_outer_prereach_sutehai(pai, n)
@@ -390,7 +391,7 @@ module Mjai
               if pai.type == "t" && pai.number >= 5
                 return 1
               else
-                return (pai == @game.bakaze ? 1 : 0) + (pai == @reacher.jikaze ? 1 : 0)
+                return (pai == @bakaze ? 1 : 0) + (pai == @reacher_kaze ? 1 : 0)
               end
             end
             
@@ -431,6 +432,7 @@ module Mjai
         attr_accessor(:min_gap)
         
         def extract_features_from_files(input_paths, output_path)
+          require "with_progress"
           $stderr.puts("%d files." % input_paths.size)
           open(output_path, "wb") do |f|
             meta_data = {
@@ -483,7 +485,13 @@ module Mjai
                 
                 when :dahai
                   next if skip || !reacher || action.actor.reach?
-                  scene = Scene.new(archive, action.actor, action.pai, reacher, prereach_sutehais)
+                  scene = Scene.new({
+                      :game => archive,
+                      :me => action.actor,
+                      :dapai => action.pai,
+                      :reacher => reacher,
+                      :prereach_sutehais => prereach_sutehais,
+                  })
                   stored_scene = StoredScene.new([])
                   #p [:candidates, action.actor, reacher, scene.candidates.join(" ")]
                   puts("reacher: %d" % reacher.id) if self.verbose
@@ -578,6 +586,8 @@ module Mjai
         
         def create_kyoku_probs_map(features_path, criteria)
           
+          require "with_progress"
+          
           @kyoku_probs_map = {}
           
           criterion_masks = {}
@@ -586,6 +596,7 @@ module Mjai
             negative_ary = [true] * Scene.feature_names.size
             for name, value in criterion
               index = Scene.feature_names.index(name)
+              raise("no such feature: %p" % name) if !index
               if value
                 positive_ary[index] = true
               else
@@ -627,7 +638,7 @@ module Mjai
                 kyoku_probs.inject(:+) / kyoku_probs.size,
                 confidence_interval(kyoku_probs),
                 kyoku_probs.size)
-            puts("%p\n  %.2f [%.2f, %.2f] (%d samples)" %
+            print("%p\n  %.2f [%.2f, %.2f] (%d samples)\n\n" %
                 [criterion,
                  node.average_prob * 100.0,
                  node.conf_interval[0] * 100.0,
