@@ -53,14 +53,14 @@ module Mjai
                 params = params.dup()
                 # Adds params[:dapai] because the game object points to the scene after the dapai.
                 params[:tehais] = params[:me].tehais + (params[:dapai] ? [params[:dapai]] : [])
-                params[:anpais] = reacher.anpais
-                params[:doras] = @game.doras
-                params[:bakaze] = @game.bakaze
-                params[:reacher_kaze] = @reacher.jikaze
+                params[:anpais] = params[:reacher].anpais
+                params[:doras] = params[:game].doras
+                params[:bakaze] = params[:game].bakaze
+                params[:reacher_kaze] = params[:reacher].jikaze
                 params[:visible] = []
-                params[:visible] += @game.doras
-                params[:visible] += @me.tehais
-                for player in @game.players
+                params[:visible] += params[:game].doras
+                params[:visible] += params[:me].tehais
+                for player in params[:game].players
                   params[:visible] += player.ho + player.furos.map(){ |f| f.pais }.flatten()
                 end
               end
