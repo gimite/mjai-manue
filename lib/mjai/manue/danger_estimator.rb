@@ -16,26 +16,6 @@ module Mjai
         
         class Scene
             
-            URASUJI_INV_MAP = {
-              1 => [5],
-              2 => [1, 6],
-              3 => [2, 7],
-              4 => [3, 5, 8],
-              5 => [1, 4, 6, 9],
-              6 => [2, 5, 7],
-              7 => [3, 8],
-              8 => [4, 9],
-              9 => [5],
-            }
-            
-            SENKISUJI_INV_MAP = {
-              3 => [1, 8],
-              4 => [2, 9],
-              5 => [3, 7],
-              6 => [1, 8],
-              7 => [2, 9],
-            }
-            
             @@feature_names = []
             
             def self.define_feature(name, &block)
@@ -65,7 +45,7 @@ module Mjai
                 end
               end
               
-              @prereach_sutehais = params[:prereach_sutehais]
+              prereach_sutehais = params[:prereach_sutehais]
               @tehai_set = to_pai_set(params[:tehais])
               @anpai_set = to_pai_set(params[:anpais])
               @visible_set = to_pai_set(params[:visible])
@@ -73,9 +53,11 @@ module Mjai
               @bakaze = params[:bakaze]
               @reacher_kaze = params[:reacher_kaze]
               
-              @prereach_sutehai_set = to_pai_set(@prereach_sutehais)
-              @early_sutehai_set = to_pai_set(@prereach_sutehais[0...(@prereach_sutehais.size / 2)])
-              @late_sutehai_set = to_pai_set(@prereach_sutehais[(@prereach_sutehais.size / 2)..-1])
+              @prereach_sutehai_set = to_pai_set(prereach_sutehais)
+              @early_sutehai_set = to_pai_set(prereach_sutehais[0...(prereach_sutehais.size / 2)])
+              @late_sutehai_set = to_pai_set(prereach_sutehais[(prereach_sutehais.size / 2)..-1])
+              # prereach_sutehais can be empty in unit tests.
+              @reach_pai = prereach_sutehais[-1] ? prereach_sutehais[-1].remove_red() : nil
               
               @candidates = @tehai_set.keys.select(){ |pai| !@anpai_set.has_key?(pai) }
               
@@ -106,27 +88,23 @@ module Mjai
               return pai.type == "t"
             end
             
+            # 表筋 or 中筋
             define_feature("suji") do |pai|
-              if pai.type == "t"
-                return false
-              else
-                return get_suji_numbers(pai).all?(){ |n| @anpai_set.has_key?(Pai.new(pai.type, n)) }
-              end
+              return suji_of(pai, @anpai_set)
             end
             
             # 片筋 or 筋
             define_feature("weak_suji") do |pai|
-              return suji_of(pai, @anpai_set)
+              return weak_suji_of(pai, @anpai_set)
             end
             
             # リーチ牌の筋。1pリーチに対する4pなども含む。
             define_feature("reach_suji") do |pai|
-              reach_pai = @prereach_sutehais[-1].remove_red()
-              if pai.type == "t" || reach_pai.type != pai.type
-                return false
-              else
-                return get_suji_numbers(pai).include?(reach_pai.number)
-              end
+              return weak_suji_of(pai, to_pai_set([@reach_pai]))
+            end
+            
+            define_feature("prereach_suji") do |pai|
+              return suji_of(pai, @prereach_sutehai_set)
             end
             
             # http://ja.wikipedia.org/wiki/%E7%AD%8B_(%E9%BA%BB%E9%9B%80)#.E8.A3.8F.E3.82.B9.E3.82.B8
@@ -139,7 +117,11 @@ module Mjai
             end
             
             define_feature("reach_urasuji") do |pai|
-              return urasuji_of(pai, to_pai_set([self.reach_pai]))
+              return urasuji_of(pai, to_pai_set([@reach_pai]))
+            end
+            
+            define_feature("urasuji_of_5") do |pai|
+              return urasuji_of(pai, @prereach_sutehai_set.select(){ |pai, f| pai.type != "t" && pai.number == 5 })
             end
             
             # http://ja.wikipedia.org/wiki/%E7%AD%8B_(%E9%BA%BB%E9%9B%80)#.E9.96.93.E5.9B.9B.E9.96.93
@@ -161,8 +143,16 @@ module Mjai
               return matagisuji_of(pai, @prereach_sutehai_set)
             end
             
+            define_feature("early_matagisuji") do |pai|
+              return matagisuji_of(pai, @early_sutehai_set)
+            end
+            
             define_feature("late_matagisuji") do |pai|
               return matagisuji_of(pai, @late_sutehai_set)
+            end
+            
+            define_feature("reach_matagisuji") do |pai|
+              return matagisuji_of(pai, to_pai_set([@reach_pai]))
             end
             
             # http://ja.wikipedia.org/wiki/%E7%AD%8B_(%E9%BA%BB%E9%9B%80)#.E7.96.9D.E6.B0.97.E3.82.B9.E3.82.B8
@@ -188,9 +178,24 @@ module Mjai
               end
             end
             
+            # 自分から見て何枚見えているか。自分の手牌も含む。出そうとしている牌自身は含まない。
             (1..3).each() do |i|
               define_feature("visible>=%d" % i) do |pai|
-                return visible_n_or_more(pai, i)
+                # i + 出そうとしている牌
+                return visible_n_or_more(pai, i + 1)
+              end
+            end
+            
+            # その牌の筋の牌のうち1つがi枚以下しか見えていない。
+            # その牌自身はカウントしない。
+            # 5pの場合は「2pと8pのどちらかがi枚以下しか見えていない」であり、「2pと8pが合計でi枚以下しか見えていない」ではない。
+            (0..3).each() do |i|
+              define_feature("suji_visible<=#{i}") do |pai|
+                if pai.type == "t"
+                  return false
+                else
+                  return get_suji_numbers(pai).any?(){ |n| !visible_n_or_more(Pai.new(pai.type, n), i + 1) }
+                end
               end
             end
             
@@ -205,7 +210,7 @@ module Mjai
             end
             
             define_feature("dora_suji") do |pai|
-              return suji_of(pai, @dora_set)
+              return weak_suji_of(pai, @dora_set)
             end
             
             define_feature("dora_matagi") do |pai|
@@ -218,7 +223,10 @@ module Mjai
               end
             end
             
-            (2..4).each() do |i|
+            # その牌の筋の牌のうち1つをi枚以上持っている。
+            # その牌自身はカウントしない。
+            # 5pの場合は「2pと8pのどちらかをi枚以上持っている」であり、「2pと8pを合計i枚以上持っている」ではない。
+            (1..4).each() do |i|
               define_feature("suji_in_tehais>=#{i}") do |pai|
                 if pai.type == "t"
                   return false
@@ -312,12 +320,32 @@ module Mjai
               if pai.type == "t"
                 return false
               else
+                return get_suji_numbers(pai).all?(){ |n| target_pai_set.has_key?(Pai.new(pai.type, n)) }            
+              end
+            end
+            
+            def weak_suji_of(pai, target_pai_set)
+              if pai.type == "t"
+                return false
+              else
                 return get_suji_numbers(pai).any?(){ |n| target_pai_set.has_key?(Pai.new(pai.type, n)) }
               end
             end
             
             def get_suji_numbers(pai)
               return [pai.number - 3, pai.number + 3].select(){ |n| (1..9).include?(n) }
+            end
+            
+            # Uses the first pai to represent the suji. e.g. 1p for 14p suji
+            def get_possible_sujis(pai)
+              if pai.type == "t"
+                return []
+              else
+                ns = [pai.number - 3, pai.number].select() do |n|
+                  [n, n + 3].all?(){ |m| (1..9).include?(m) && !@anpai_set.include?(Pai.new(pai.type, m)) }
+                end
+                return ns.map(){ |n| Pai.new(pai.type, n) }
+              end
             end
             
             def n_chance_or_less(pai, n)
@@ -336,16 +364,15 @@ module Mjai
             end
             
             def visible_n_or_more(pai, n)
-              # n doesn't include itself.
-              return @visible_set[pai] >= n + 1
+              return @visible_set[pai] >= n
             end
             
             def urasuji_of(pai, target_pai_set)
               if pai.type == "t"
                 return false
               else
-                urasuji_numbers = URASUJI_INV_MAP[pai.number]
-                return urasuji_numbers.any?(){ |n| target_pai_set.has_key?(Pai.new(pai.type, n)) }
+                sujis = get_possible_sujis(pai)
+                return sujis.any?(){ |s| target_pai_set.has_key?(s.next(-1)) || target_pai_set.has_key?(s.next(4)) }
               end
             end
             
@@ -353,9 +380,8 @@ module Mjai
               if pai.type == "t"
                 return false
               else
-                senkisuji_numbers = SENKISUJI_INV_MAP[pai.number]
-                return senkisuji_numbers &&
-                    senkisuji_numbers.any?(){ |n| target_pai_set.has_key?(Pai.new(pai.type, n)) }
+                sujis = get_possible_sujis(pai)
+                return sujis.any?(){ |s| target_pai_set.has_key?(s.next(-2)) || target_pai_set.has_key?(s.next(5)) }
               end
             end
             
@@ -363,14 +389,8 @@ module Mjai
               if pai.type == "t"
                 return false
               else
-                matagisuji_numbers = []
-                if pai.number >= 4
-                  matagisuji_numbers += [pai.number - 2, pai.number - 1]
-                end
-                if pai.number <= 6
-                  matagisuji_numbers += [pai.number + 1, pai.number + 2]
-                end
-                return matagisuji_numbers.any?(){ |n| target_pai_set.has_key?(Pai.new(pai.type, n)) }
+                sujis = get_possible_sujis(pai)
+                return sujis.any?(){ |s| target_pai_set.has_key?(s.next(1)) || target_pai_set.has_key?(s.next(2)) }
               end
             end
             
@@ -381,10 +401,6 @@ module Mjai
                 inner_numbers = pai.number < 5 ? ((pai.number + 1)..5) : (5..(pai.number - 1))
                 return inner_numbers.any?(){ |n| target_pai_set.has_key?(Pai.new(pai.type, n)) }
               end
-            end
-            
-            def reach_pai
-              return @prereach_sutehais[-1]
             end
             
             def fanpai_fansu(pai)

@@ -37,6 +37,10 @@ case action
       {"tsupai" => true, "sangenpai" => false},
       {"tsupai" => true, "fanpai" => true},
       {"tsupai" => true, "fanpai" => false},
+      {"tsupai" => true, "visible>=3" => true},
+      {"tsupai" => true, "visible>=3" => false, "visible>=2" => true},
+      {"tsupai" => true, "visible>=2" => false, "visible>=1" => true},
+      {"tsupai" => true, "visible>=1" => false},
       
     ]
     
@@ -48,7 +52,12 @@ case action
       {"tsupai" => false, "suji" => false, "weak_suji" => true},
       {"tsupai" => false, "suji" => false, "weak_suji" => false},
       
+      {"tsupai" => false, "suji" => true},
+      {"tsupai" => false, "suji" => true, "4<=n<=6" => false},  # 表筋
+      {"tsupai" => false, "suji" => true, "4<=n<=6" => true},  # 中筋
       {"tsupai" => false, "suji" => true, "reach_suji" => true},
+      {"tsupai" => false, "suji" => true, "prereach_suji" => true},
+      {"tsupai" => false, "suji" => true, "prereach_suji" => false},
       
       {"tsupai" => false, "suji" => false, "outer_early_sutehai" => true},
       {"tsupai" => false, "suji" => false, "outer_prereach_sutehai" => true},
@@ -56,11 +65,17 @@ case action
       {"tsupai" => false, "suji" => false, "urasuji" => true},
       {"tsupai" => false, "suji" => false, "early_urasuji" => true},
       {"tsupai" => false, "suji" => false, "reach_urasuji" => true},
+      {"tsupai" => false, "suji" => false, "urasuji_of_5" => true},
       {"tsupai" => false, "suji" => false, "aida4ken" => true},
       {"tsupai" => false, "suji" => false, "matagisuji" => true},
+      {"tsupai" => false, "suji" => false, "early_matagisuji" => true},
       {"tsupai" => false, "suji" => false, "late_matagisuji" => true},
+      {"tsupai" => false, "suji" => false, "reach_matagisuji" => true},
       {"tsupai" => false, "suji" => false, "senkisuji" => true},
       {"tsupai" => false, "suji" => false, "early_senkisuji" => true},
+      
+      {"tsupai" => false, "suji" => false, "in_tehais>=3" => true},
+      {"tsupai" => false, "suji" => false, "suji_in_tehais>=3" => true},
       
       {"tsupai" => false, "suji" => false, "chances<=0" => true},
       {"tsupai" => false, "suji" => false, "chances<=0" => false, "chances<=1" => true},
@@ -72,6 +87,12 @@ case action
       {"tsupai" => false, "suji" => false, "visible>=3" => false, "visible>=2" => true},
       {"tsupai" => false, "suji" => false, "visible>=2" => false, "visible>=1" => true},
       {"tsupai" => false, "suji" => false, "visible>=1" => false},
+      
+      {"tsupai" => false, "suji" => false, "suji_visible<=0" => true},
+      {"tsupai" => false, "suji" => false, "suji_visible<=0" => false, "suji_visible<=1" => true},
+      {"tsupai" => false, "suji" => false, "suji_visible<=1" => false, "suji_visible<=2" => true},
+      {"tsupai" => false, "suji" => false, "suji_visible<=2" => false, "suji_visible<=3" => true},
+      {"tsupai" => false, "suji" => false, "suji_visible<=3" => false},
       
       {"tsupai" => false, "suji" => false, "dora" => true},
       {"tsupai" => false, "suji" => false, "dora_suji" => true},
@@ -85,18 +106,12 @@ case action
       {"tsupai" => false, "suji" => false, "suji_in_tehais>=4" => true},
       {"tsupai" => false, "suji" => false, "suji_in_tehais>=4" => false, "suji_in_tehais>=3" => true},
       {"tsupai" => false, "suji" => false, "suji_in_tehais>=3" => false, "suji_in_tehais>=2" => true},
-      {"tsupai" => false, "suji" => false, "suji_in_tehais>=2" => false},
+      {"tsupai" => false, "suji" => false, "suji_in_tehais>=2" => false, "suji_in_tehais>=1" => true},
+      {"tsupai" => false, "suji" => false, "suji_in_tehais>=1" => false},
 
+      # same_type_in_prereach>=5 is too rare.
       {"tsupai" => false, "suji" => false,
-          "same_type_in_prereach>=8" => true},
-      {"tsupai" => false, "suji" => false,
-          "same_type_in_prereach>=8" => false, "same_type_in_prereach>=7" => true},
-      {"tsupai" => false, "suji" => false,
-          "same_type_in_prereach>=7" => false, "same_type_in_prereach>=6" => true},
-      {"tsupai" => false, "suji" => false,
-          "same_type_in_prereach>=6" => false, "same_type_in_prereach>=5" => true},
-      {"tsupai" => false, "suji" => false,
-          "same_type_in_prereach>=5" => false, "same_type_in_prereach>=4" => true},
+          "same_type_in_prereach>=4" => true},
       {"tsupai" => false, "suji" => false,
           "same_type_in_prereach>=4" => false, "same_type_in_prereach>=3" => true},
       {"tsupai" => false, "suji" => false,
