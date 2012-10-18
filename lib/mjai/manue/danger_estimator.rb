@@ -38,7 +38,7 @@ module Mjai
                 params[:bakaze] = params[:game].bakaze
                 params[:reacher_kaze] = params[:reacher].jikaze
                 params[:visible] = []
-                params[:visible] += params[:game].doras
+                params[:visible] += params[:game].dora_markers
                 params[:visible] += params[:me].tehais
                 for player in params[:game].players
                   params[:visible] += player.ho + player.furos.map(){ |f| f.pais }.flatten()
@@ -447,7 +447,7 @@ module Mjai
         attr_accessor(:verbose)
         attr_accessor(:min_gap)
         
-        def extract_features_from_files(input_paths, output_path)
+        def extract_features_from_files(input_paths, output_path, listener = nil)
           require "with_progress"
           $stderr.puts("%d files." % input_paths.size)
           open(output_path, "wb") do |f|
@@ -461,13 +461,13 @@ module Mjai
                 Marshal.dump(@stored_kyokus, f)
                 @stored_kyokus.clear()
               end
-              extract_features_from_file(path)
+              extract_features_from_file(path, listener)
             end
             Marshal.dump(@stored_kyokus, f)
           end
         end
         
-        def extract_features_from_file(input_path)
+        def extract_features_from_file(input_path, listener)
           begin
             stored_kyoku = nil
             reacher = nil
@@ -511,10 +511,16 @@ module Mjai
                   stored_scene = StoredScene.new([])
                   #p [:candidates, action.actor, reacher, scene.candidates.join(" ")]
                   puts("reacher: %d" % reacher.id) if self.verbose
+                  candidates = []
                   for pai in scene.candidates
                     hit = waited.include?(pai)
                     feature_vector = scene.feature_vector(pai)
                     stored_scene.candidates.push([feature_vector, hit])
+                    candidates.push({
+                        :pai => pai,
+                        :hit => hit,
+                        :feature_vector => feature_vector,
+                    })
                     if self.verbose
                       puts("candidate %s: hit=%d, %s" % [
                           pai,
@@ -523,6 +529,14 @@ module Mjai
                     end
                   end
                   stored_kyoku.scenes.push(stored_scene)
+                  if listener
+                    listener.on_dahai({
+                        :game => archive,
+                        :action => action,
+                        :reacher => reacher,
+                        :candidates => candidates,
+                    })
+                  end
                   
               end
             end
@@ -597,7 +611,7 @@ module Mjai
         
         def calculate_probabilities(features_path, criteria)
           create_kyoku_probs_map(features_path, criteria)
-          aggregate_pribabilities(criteria)
+          return aggregate_probabilities(criteria)
         end
         
         def create_kyoku_probs_map(features_path, criteria)
@@ -645,7 +659,7 @@ module Mjai
           
         end
         
-        def aggregate_pribabilities(criteria)
+        def aggregate_probabilities(criteria)
           result = {}
           for criterion in criteria
             kyoku_probs = @kyoku_probs_map[criterion.object_id]

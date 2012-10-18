@@ -150,8 +150,13 @@ module Mjai
                     if player != self && player.reach?
                       #p [:reacher, player, @prereach_sutehais_map[player]]
                       has_reacher = true
-                      scene = DangerEstimator::Scene.new(
-                          self.game, self, nil, player, @prereach_sutehais_map[player])
+                      scene = DangerEstimator::Scene.new({
+                          :game => self.game,
+                          :me => self, 
+                          :dapai => nil,
+                          :reacher => player,
+                          :prereach_sutehais => @prereach_sutehais_map[player],
+                      })
                       for pai in safe_probs.keys
                         if scene.anpai?(pai)
                           safe_prob = 1.0
