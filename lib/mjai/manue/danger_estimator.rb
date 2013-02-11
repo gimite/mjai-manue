@@ -5,6 +5,7 @@ require "optparse"
 
 require "mjai/pai"
 require "mjai/archive"
+require "mjai/confidence_interval"
 
 
 module Mjai
@@ -666,7 +667,7 @@ module Mjai
             next if !kyoku_probs
             result[criterion] = node = DecisionNode.new(
                 kyoku_probs.inject(:+) / kyoku_probs.size,
-                confidence_interval(kyoku_probs),
+                ConfidenceInterval.calculate(kyoku_probs, :min => 0.0, :max => 1.0),
                 kyoku_probs.size)
             print("%p\n  %.2f [%.2f, %.2f] (%d samples)\n\n" %
                 [criterion,
@@ -711,33 +712,6 @@ module Mjai
         def match?(feature_vector, positive_mask, negative_mask)
           return (feature_vector & positive_mask) == positive_mask &&
               (feature_vector | negative_mask) == negative_mask
-        end
-        
-        # Uses bootstrap resampling.
-        def confidence_interval(samples, conf_level = 0.95)
-          num_tries = 1000
-          averages = []
-          num_tries.times() do
-            sum = 0.0
-            (samples.size + 2).times() do
-              idx = rand(samples.size + 2)
-              case idx
-                when samples.size
-                  sum += 0.0
-                when samples.size + 1
-                  sum += 1.0
-                else
-                  sum += samples[idx]
-              end
-            end
-            averages.push(sum / (samples.size + 2))
-          end
-          averages.sort!()
-          margin = (1.0 - conf_level) / 2
-          return [
-            averages[(num_tries * margin).to_i()],
-            averages[(num_tries * (1.0 - margin)).to_i()],
-          ]
         end
         
         def self.bool_array_to_bit_vector(bool_array)
