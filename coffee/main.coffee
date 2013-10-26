@@ -1,9 +1,9 @@
 TCPClientGame = require("./tcp_client_game")
-TsumogiriPlayer = require("./tsumogiri_player")
+TsumogiriAI = require("./tsumogiri_ai")
 
 game = new TCPClientGame({
     url: "mjsonp://localhost:19001/default",
     name: "tsumogiri",
-    player: new TsumogiriPlayer(),
+    ai: new TsumogiriAI(),
 })
 game.play()

@@ -10,8 +10,10 @@ class Action
 
   merge: (extraParams) ->
     params = {}
-    for k, v of this
-      params[k] = v
+    for name, type of Action.FIELD_SPECS
+      camelName = Action.camelCase(name)
+      if camelName in this
+        params[camelName] = this[camelName]
     for k, v of extraParams
       params[k] = v
     return new Action(params)
@@ -27,7 +29,7 @@ class Action
         when "pai"
           plain = obj.toString()
         when "player"
-          plain = obj.id()
+          plain = obj.id
         when "pais"
           plain = (c.toString() for c in obj)
         when "pais_list"

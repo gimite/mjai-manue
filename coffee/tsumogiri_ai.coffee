@@ -1,9 +1,9 @@
-Player = require("./player")
+AI = require("./ai")
 
-class TsumogiriPlayer extends Player
+class TsumogiriAI extends AI
 
   respondToAction: (action) ->
-    if action.actor == this
+    if action.actor == @player()
       switch action.type
         when "tsumo"
           return @createAction({
@@ -13,4 +13,4 @@ class TsumogiriPlayer extends Player
           })
     return null
 
-module.exports = TsumogiriPlayer
+module.exports = TsumogiriAI
