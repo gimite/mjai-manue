@@ -12,7 +12,9 @@ class ManueAI extends AI
     if action.actor == @player()
       switch action.type
         when "tsumo", "chi", "pon", "reach"
-          analysis = new ShantenAnalysis(pai.id() for pai in @player().tehais)
+          analysis = new ShantenAnalysis(
+              pai.id() for pai in @player().tehais,
+              {allowedExtraPais: 1})
           if @game().canHora(@player(), analysis)
             return @createAction(
                 type: "hora",
@@ -44,6 +46,7 @@ class ManueAI extends AI
     console.log("  shanten", analysis.shanten())
     currentVector = new PaiSet(@player().tehais).array()
     goals = analysis.goals()
+    console.log("  goals", goals.length)
 
     # console.log("goals", goals.length)
     # for goal in goals
