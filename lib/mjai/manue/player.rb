@@ -261,7 +261,7 @@ module Mjai
         
         def get_scene(params)
           visible = []
-          visible += self.game.doras
+          visible += self.game.dora_markers
           visible += self.tehais
           for player in self.game.players
             visible += player.ho + player.furos.map(){ |f| f.pais }.flatten()

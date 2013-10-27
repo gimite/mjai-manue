@@ -68,8 +68,11 @@ class TCPClientGame
         @_ai.initialize(this, @_players[action.id])
       when "start_kyoku"
         @_numPipais = Pai.NUM_IDS * 4 - 13 * 4 - 14
+        @_doraMarkers = [action.doraMarker]
       when "tsumo"
         --@_numPipais
+      when "dora"
+        @_doraMarkers.push(action.doraMarker)
 
     for player in @_players
 
@@ -204,6 +207,12 @@ class TCPClientGame
   anpais: (player) ->
     return player.sutehais.concat(player.extraAnpais)
 
+  doras: ->
+    if @_doraMarkers
+      return [pai.nextForDora() for pai in @_doraMarkers]
+    else
+      return null
+
   deleteTehai: (player, pai) ->
     paiIndex = null
     for i in [0...player.tehais.length]
@@ -214,6 +223,6 @@ class TCPClientGame
       throw "trying to delete #{pai} which is not in tehais: #{player.tehais}"
     player.tehais.splice(paiIndex, 1)
 
-Util.attrReader(TCPClientGame, ["players"])
+Util.attrReader(TCPClientGame, ["players", "doraMarkers"])
 
 module.exports = TCPClientGame

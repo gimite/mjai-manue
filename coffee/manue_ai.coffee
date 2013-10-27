@@ -52,7 +52,18 @@ class ManueAI extends AI
       # console.log("goalThrowableVector", countVectorToStr(goal.throwableVector))
       # console.log("goalMentsus", ([m.type, new Pai(m.firstPid).toString()] for m in goal.mentsus))
 
-    invisiblePids = ManueAI.ALL_PIDS.concat([])  # kari
+    visiblePaiSet = new PaiSet()
+    visiblePaiSet.addPais(@game().doraMarkers())
+    visiblePaiSet.addPais(@player().tehais)
+    for player in @game().players()
+      visiblePaiSet.addPais(player.ho)
+      for furo in player.furos
+        visiblePaiSet.addPais(furo.pais())
+    invisiblePaiSet = PaiSet.getAll()
+    invisiblePaiSet.removePaiSet(visiblePaiSet)
+    invisiblePids = (pai.id() for pai in invisiblePaiSet.toPais())
+    #console.log("visiblePaiSet", visiblePaiSet.toString())
+    #console.log("invisiblePids", Pai.paisToStr(new Pai(pid) for pid in invisiblePids))
 
     numTsumos = 18
     numTries = 1000

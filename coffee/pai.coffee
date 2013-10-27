@@ -60,6 +60,17 @@ class Pai
       if @equal(pai) then return true
     return false
 
+  nextForDora: ->
+    type = @type()
+    number = @number()
+    if (type == "t" && number == 4) || (type != "t" && number == 9)
+      nextNumber = 1
+    else if type == "t" && number == 7
+      nextNumber = 5
+    else
+      nextNumber = number + 1
+    return new Pai(type, nextNumber)
+
   toString: ->
     type = @type()
     number = @number()
