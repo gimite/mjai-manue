@@ -8,12 +8,17 @@ CHOWS = [0, 1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 18, 19, 20, 21, 22, 23,
 class ShantenAnalysis
 
   constructor: (pids) ->
-    if pids.length != 14
-      throw "not supported"
-    countVector = @pidsToCountVector(pids)
+    currentVector = @pidsToCountVector(pids)
     targetVector = (0 for _ in [0...NUM_PIDS])
+    numMentsus = Math.floor(pids.length / 3)
     @_goals = []
-    @_shanten = @calculateShantensuInternal(countVector, targetVector, 0, 4, 0, 1 / 0, [], @_goals) - 1
+    @_shanten = @calculateShantensuInternal(
+        currentVector, targetVector, 0, numMentsus, 0, 1 / 0, [], @_goals) - 1
+    for goal in @_goals
+      goal.requiredVector = for pid in [0...Pai.NUM_IDS]
+        Math.max(goal.countVector[pid] - currentVector[pid], 0)
+      goal.throwableVector = for pid in [0...Pai.NUM_IDS]
+        Math.max(currentVector[pid] - goal.countVector[pid], 0)
 
   pidsToCountVector: (pids) ->
     countVector = (0 for _ in [0...NUM_PIDS])

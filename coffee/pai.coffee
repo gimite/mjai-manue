@@ -50,10 +50,15 @@ class Pai
     return if @_id == null then null else @_id % 9 + 1
 
   equal: (other) ->
-    return other.constructor == Pai && @_id == other.id() && @_red == other.red()
+    return other && other.constructor == Pai && @_id == other.id() && @_red == other.red()
 
   hasSameSymbol: (other) ->
     return @_id == other.id()
+
+  isIn: (pais) ->
+    for pai in pais
+      if @equal(pai) then return true
+    return false
 
   toString: ->
     type = @type()

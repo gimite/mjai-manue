@@ -4,6 +4,7 @@ Action = require("./action")
 Pai = require("./pai")
 Furo = require("./furo")
 Util = require("./util")
+ShantenAnalysis = require("./shanten_analysis")
 
 class TCPClientGame
 
@@ -56,12 +57,29 @@ class TCPClientGame
 
   updateState: (action) ->
 
-    if action.type == "start_game"
-      @_myId = action.id
-      @_players = ({id: i} for i in [0...4])
-      @_ai.initialize(this, @_players[action.id])
+    @_previousAction = @_currentAction
+    @_currentAction = action
+    if action.actor then @_actor = action.actor
+
+    switch action.type
+      when "start_game"
+        @_myId = action.id
+        @_players = ({id: i} for i in [0...4])
+        @_ai.initialize(this, @_players[action.id])
+      when "start_kyoku"
+        @_numPipais = Pai.NUM_IDS * 4 - 13 * 4 - 14
+      when "tsumo"
+        --@_numPipais
 
     for player in @_players
+
+      # This is specially handled here because it's not an anpai if the dahai is followed by
+      # a hora.
+      if @_previousAction &&
+          @_previousAction.type == "dahai" &&
+          @_previousAction.actor != player &&
+          action.type != "hora"
+        player.extraAnpais.push(@_previousAction.pai)
 
       switch action.type
         when "start_game"
@@ -72,6 +90,7 @@ class TCPClientGame
           player.furos = null
           player.ho = null
           player.sutehais = null
+          player.extraAnpais = null
           player.reachState = null
           player.reachHoIndex = null
         when "start_kyoku"
@@ -79,6 +98,7 @@ class TCPClientGame
           player.furos = []
           player.ho = []
           player.sutehais = []
+          player.extraAnpais = []
           player.reachState = "none"
           player.reachHoIndex = null
 
@@ -91,6 +111,7 @@ class TCPClientGame
             player.tehais.sort(Pai.compare)
             player.ho.push(action.pai)
             player.sutehais.push(action.pai)
+            if player.reachState != "accepted" then player.extraAnpais = []
           when "chi", "pon", "daiminkan", "ankan"
             for pai in action.consumed
               @deleteTehai(player, pai)
@@ -133,6 +154,55 @@ class TCPClientGame
 
       console.log("[#{player.id}] tehai: " + Pai.paisToStr(player.tehais))
       console.log("       ho: " + Pai.paisToStr(player.ho))
+
+  canHora: (player, shantenAnalysis) ->
+    action = @_currentAction
+    if action.type == "tsumo" && action.actor == player
+      horaType = "tsumo"
+      pais = player.tehais
+    else if (action.type == "dahai" || action.type == "kakan") && action.actor != player
+      horaType = "ron"
+      pais = player.tehais.concat([action.pai])
+    else
+      return false
+    if !shantenAnalysis
+      shantenAnalysis = new ShantenAnalysis(pai.id() for pai in pais)  # TODO check only hora
+    # horaAction = new Action(
+    #     type: "hora", actor: player, target: action.actor, pai: action.pai)
+    # return shantenAnalysis.shanten() == -1 &&
+    #     getHora(horaAction, {previousAction: action}).valid() &&
+    #     (horaType == "tsumo" || !@isFuriten(player)
+    # TODO Implement yaku detection
+    return shantenAnalysis.shanten() == -1 &&
+        player.reachState == "accepted" &&
+        (horaType == "tsumo" || !@isFuriten(player))
+
+  canReach: (player, shantenAnalysis) ->
+    if !shantenAnalysis
+      # TODO check only tenpai
+      shantenAnalysis = new ShantenAnalysis(pai.id() for pai in player.tehais)
+    return @_currentAction.type == "tsumo" &&
+        @_currentAction.actor == player &&
+        shantenAnalysis.shanten() <= 0 &&
+        player.furos.length == 0 &&
+        player.reachState == "none" &&
+        @_numPipais >= 4 &&
+        player.score >= 1000
+
+  isFuriten: (player) ->
+    if player.tehais.length % 3 != 1 then return false
+    if Pai.UNKNOWN.isIn(player.tehais) then return false
+    shantenAnalysis = new ShantenAnalysis(player.tehais)  # TODO check only tenpai
+    if shantenAnalysis.shanten() > 0 then return false
+    anpais = @anpais(player)
+    for goal in shantenAnalysis.goals()
+      for pid in [0...Pai.NUM_IDS]
+        if goal.requiredVector[pid] > 0 && new Pai(pid).isIn(anpais)
+          return true
+    return false
+
+  anpais: (player) ->
+    return player.sutehais.concat(player.extraAnpais)
 
   deleteTehai: (player, pai) ->
     paiIndex = null

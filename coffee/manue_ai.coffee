@@ -6,30 +6,47 @@ ShantenAnalysis = require("./shanten_analysis")
 class ManueAI extends AI
 
   respondToAction: (action) ->
+
     #console.log(action, action.actor, @player, action.type)
+
     if action.actor == @player()
       switch action.type
         when "tsumo", "chi", "pon", "reach"
           analysis = new ShantenAnalysis(pai.id() for pai in @player().tehais)
-          dahai = @decideDahai(analysis)
-          return @createAction({
-              type: "dahai",
-              pai: dahai,
-              tsumogiri: dahai.equal(action.pai),
-          })
+          if @game().canHora(@player(), analysis)
+            return @createAction(
+                type: "hora",
+                target: action.actor,
+                pai: action.pai)
+          else if @game().canReach(@player(), analysis)
+            return @createAction(type: "reach")
+          else if @player().reachState == "accepted"
+            return @createAction(type: "dahai", pai: action.pai, tsumogiri: true)
+          else
+            dahai = @decideDahai(analysis)
+            return @createAction(
+                type: "dahai",
+                pai: dahai,
+                tsumogiri: action.type == "tsumo" && dahai.equal(action.pai))
+    else
+      switch action.type
+        when "dahai"
+          if @game().canHora(@player())
+            return @createAction(
+                type: "hora",
+                target: action.actor,
+                pai: action.pai)
+
     return null
 
   decideDahai: (analysis) ->
 
+    console.log("  shanten", analysis.shanten())
     currentVector = new PaiSet(@player().tehais).array()
     goals = analysis.goals()
 
     # console.log("goals", goals.length)
-    for goal in goals
-      goal.requiredVector = for pid in [0...Pai.NUM_IDS]
-        Math.max(goal.countVector[pid] - currentVector[pid], 0)
-      goal.throwableVector = for pid in [0...Pai.NUM_IDS]
-        Math.max(currentVector[pid] - goal.countVector[pid], 0)
+    # for goal in goals
       # console.log("goalVector", countVectorToStr(goal.countVector))
       # console.log("goalRequiredVector", countVectorToStr(goal.requiredVector))
       # console.log("goalThrowableVector", countVectorToStr(goal.throwableVector))
