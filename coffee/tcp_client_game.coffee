@@ -209,7 +209,7 @@ class TCPClientGame
 
   doras: ->
     if @_doraMarkers
-      return [pai.nextForDora() for pai in @_doraMarkers]
+      return (pai.nextForDora() for pai in @_doraMarkers)
     else
       return null
 

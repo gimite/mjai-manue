@@ -50,7 +50,7 @@ class ShantenAnalysis
             goalVector[i] += 2
             goal = {
                 shanten: newShanten - 1,
-                mentsus: mentsus.concat([{type: "toitsu", firstPid: i}]),
+                mentsus: mentsus.concat([{type: "toitsu", pids: [i, i]}]),
                 countVector: goalVector,
             }
             goals.push(goal)
@@ -73,7 +73,7 @@ class ShantenAnalysis
               vector1[i] += 3
               upperbound = @calculateShantensuInternal(
                   vector0, vector1, current1, numMeldsLeft - 1, i, upperbound,
-                  mentsus.concat([{type: "kotsu", firstPid: i}]), goals)
+                  mentsus.concat([{type: "kotsu", pids: [i, i, i]}]), goals)
               vector1[i] -= 3
 
         startChowId = if minMeldId < NUM_PIDS then 0 else minMeldId - NUM_PIDS
@@ -89,7 +89,7 @@ class ShantenAnalysis
             ++vector1[i]; ++vector1[i + 1]; ++vector1[i + 2]
             upperbound = @calculateShantensuInternal(
                 vector0, vector1, current1, numMeldsLeft - 1, chowId + NUM_PIDS, upperbound,
-                mentsus.concat([{type: "shuntsu", firstPid: i}]), goals)
+                mentsus.concat([{type: "shuntsu", pids: [i, i + 1, i + 2]}]), goals)
             --vector1[i]; --vector1[i + 1]; --vector1[i + 2]
         return upperbound
 

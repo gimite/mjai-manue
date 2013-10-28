@@ -71,6 +71,14 @@ class Pai
       nextNumber = number + 1
     return new Pai(type, nextNumber)
 
+  isYaochu: ->
+    type = @type()
+    number = @number()
+    return type == "t" || number == 1 || number == 9
+
+  removeRed: ->
+    return new Pai(@_id)
+
   toString: ->
     type = @type()
     number = @number()

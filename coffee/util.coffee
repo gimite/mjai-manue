@@ -14,4 +14,14 @@ Util =
         cls.prototype["set#{capital}"] = ((a) -> this["_#{n}"] = a)
       )(name)
 
+  all: (array, func) ->
+    for v in array
+      if !func(v) then return false
+    return true
+
+  any: (array, func) ->
+    for v in array
+      if func(v) then return true
+    return false
+
 module.exports = Util
