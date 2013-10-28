@@ -2,6 +2,7 @@ AI = require("./ai")
 Pai = require("./pai")
 PaiSet = require("./pai_set")
 ShantenAnalysis = require("./shanten_analysis")
+BitVector = require("./bit_vector")
 
 class ManueAI extends AI
 
@@ -12,9 +13,11 @@ class ManueAI extends AI
     if action.actor == @player()
       switch action.type
         when "tsumo", "chi", "pon", "reach"
+          # @_start = new Date()
           analysis = new ShantenAnalysis(
               pai.id() for pai in @player().tehais,
               {allowedExtraPais: 1})
+          # console.log("analyzed", new Date() - @_start)
           if @game().canHora(@player(), analysis)
             return @createAction(
                 type: "hora",
@@ -45,8 +48,16 @@ class ManueAI extends AI
 
     console.log("  shanten", analysis.shanten())
     currentVector = new PaiSet(@player().tehais).array()
-    goals = analysis.goals()
+    goals = []
+    for goal in analysis.goals()
+      # If it's tenpai, tenpai must be kept because it has reached.
+      # If shanten > 3, including goals with extra pais is too slow.
+      if (analysis.shanten() >= 1 && analysis.shanten() <= 3) ||
+          goal.shanten == analysis.shanten()
+        goal.requiredBitVectors = @countVectorToBitVectors(goal.requiredVector)
+        goals.push(goal)
     console.log("  goals", goals.length)
+    #console.log("requiredBitVectors", new Date() - @_start)
 
     # console.log("goals", goals.length)
     # for goal in goals
@@ -65,7 +76,7 @@ class ManueAI extends AI
     invisiblePaiSet = PaiSet.getAll()
     invisiblePaiSet.removePaiSet(visiblePaiSet)
     invisiblePids = (pai.id() for pai in invisiblePaiSet.toPais())
-    #console.log("visiblePaiSet", visiblePaiSet.toString())
+    #console.log("  visiblePaiSet", visiblePaiSet.toString())
     #console.log("invisiblePids", Pai.paisToStr(new Pai(pid) for pid in invisiblePids))
 
     numTsumos = 18
@@ -73,17 +84,16 @@ class ManueAI extends AI
     totalHoraVector = (0 for _ in [0...Pai.NUM_IDS])
     for i in [0...numTries]
       @shuffle(invisiblePids, numTsumos)
-      #invisiblePids = (pai.id() for pai in Pai.strToPais("1m 6m 4p"))
       tsumoVector = new PaiSet(new Pai(pid) for pid in invisiblePids[0...numTsumos]).array()
-      #console.log("tsumoVector", @countVectorToStr(tsumoVector))
+      tsumoBitVectors = @countVectorToBitVectors(tsumoVector)
       horaVector = (0 for _ in [0...Pai.NUM_IDS])
       #goalVector = (null for _ in [0...Pai.NUM_IDS])
       for goal in goals
         achieved = true
-        for pid in [0...Pai.NUM_IDS]
-          if tsumoVector[pid] < goal.requiredVector[pid]
+        for i in [0...tsumoBitVectors.length]
+          if !goal.requiredBitVectors[i].isSubsetOf(tsumoBitVectors[i])
             achieved = false
-        #console.log("goal", countVectorToStr(goal.requiredVector), achieved)
+            break
         if achieved
           for pid in [0...Pai.NUM_IDS]
             if goal.throwableVector[pid] > 0
@@ -91,18 +101,21 @@ class ManueAI extends AI
               #goalVector[pid] = goal
       for pid in [0...Pai.NUM_IDS]
         if horaVector[pid] == 1
-          #console.log("  ", new Pai(pid).toString(), ":", countVectorToStr(goalVector[pid].countVector))
-          ++totalHoraVector[pid];
+          ++totalHoraVector[pid]
+    #console.log("monte carlo", new Date() - @_start)
 
-    maxHoraProb = -1/0
+    maxHoraProb = -1 / 0
     maxPid = null
+    horaProbs = {}
     for pid in [0...Pai.NUM_IDS]
       if currentVector[pid] > 0
-        horaProb = totalHoraVector[pid] / numTries
-        console.log("  horaProb", new Pai(pid).toString(), horaProb)
+        horaProbs[pid] = horaProb = totalHoraVector[pid] / numTries
         if horaProb > maxHoraProb
           maxHoraProb = horaProb
           maxPid = pid
+
+    for pai in @player().tehais
+      console.log("  horaProb", pai.toString(), horaProbs[pai.id()])
 
     # Just returning new Pai(maxPid) doesn't work because it may be a red pai.
     for pai in @player().tehais
@@ -121,6 +134,12 @@ class ManueAI extends AI
 
   countVectorToStr: (countVector) ->
     return new PaiSet({array: countVector}).toString()
+
+  countVectorToBitVectors: (countVector) ->
+    bitVectors = []
+    for i in [1...5]
+      bitVectors.push(new BitVector(c >= i for c in countVector))
+    return bitVectors
 
 ManueAI.getAllPids = ->
   allPids = []
