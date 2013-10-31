@@ -66,9 +66,21 @@ class TCPClientGame
         @_myId = action.id
         @_players = ({id: i} for i in [0...4])
         @_ai.initialize(this, @_players[action.id])
+        @_bakaze = null
+        @_kyokuNum = null
+        @_honba = null
+        @_oya = null
+        @_chicha = null
+        @_doraMarkers = null
+        @_numPipais = null
       when "start_kyoku"
-        @_numPipais = Pai.NUM_IDS * 4 - 13 * 4 - 14
+        @_bakaze = action.bakaze
+        @_kyokuNum = action.kyoku
+        @_honba = action.honba
+        @_oya = action.oya
+        if !@_chicha then @_chicha = @_oya
         @_doraMarkers = [action.doraMarker]
+        @_numPipais = Pai.NUM_IDS * 4 - 13 * 4 - 14
       when "tsumo"
         --@_numPipais
       when "dora"
@@ -213,6 +225,22 @@ class TCPClientGame
     else
       return null
 
+  jikaze: (player) ->
+    if @_oya
+      return new Pai("t", 1 + (4 + player.id - @_oya.id) % 4)
+    else
+      return null
+
+  yakuhaiFan: (pai, player) ->
+    fan = 0
+    if pai.type() == "t" && pai.number() >= 5 && pai.number() <= 7
+      ++fan
+    if pai.hasSameSymbol(@_bakaze)
+      ++fan
+    if pai.hasSameSymbol(@jikaze(player))
+      ++fan
+    return fan
+
   deleteTehai: (player, pai) ->
     paiIndex = null
     for i in [0...player.tehais.length]
@@ -223,6 +251,6 @@ class TCPClientGame
       throw "trying to delete #{pai} which is not in tehais: #{player.tehais}"
     player.tehais.splice(paiIndex, 1)
 
-Util.attrReader(TCPClientGame, ["players", "doraMarkers"])
+Util.attrReader(TCPClientGame, ["players", "doraMarkers", "bakaze"])
 
 module.exports = TCPClientGame

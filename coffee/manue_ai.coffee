@@ -85,12 +85,14 @@ class ManueAI extends AI
     numTries = 1000
     totalHoraVector = (0 for _ in [0...Pai.NUM_IDS])
     totalPointsVector = (0 for _ in [0...Pai.NUM_IDS])
+    totalYakuToFanVector = ({} for _ in [0...Pai.NUM_IDS])
     for i in [0...numTries]
       @shuffle(invisiblePids, numTsumos)
       tsumoVector = new PaiSet(new Pai(pid) for pid in invisiblePids[0...numTsumos]).array()
       tsumoBitVectors = @countVectorToBitVectors(tsumoVector)
       horaVector = (0 for _ in [0...Pai.NUM_IDS])
       pointsVector = (0 for _ in [0...Pai.NUM_IDS])
+      yakuToFanVector = ({} for _ in [0...Pai.NUM_IDS])
       #goalVector = (null for _ in [0...Pai.NUM_IDS])
       for goal in goals
         achieved = true
@@ -104,35 +106,64 @@ class ManueAI extends AI
               horaVector[pid] = 1
               if goal.points > pointsVector[pid]
                 pointsVector[pid] = goal.points
+                yakuToFanVector[pid] = {}
+                for yaku in goal.yakus
+                  [name, fan] = yaku
+                  yakuToFanVector[pid][name] = fan
               #goalVector[pid] = goal
       for pid in [0...Pai.NUM_IDS]
         if horaVector[pid] == 1
           ++totalHoraVector[pid]
           totalPointsVector[pid] += pointsVector[pid]
+          for name, fan of yakuToFanVector[pid]
+            if name of totalYakuToFanVector[pid]
+              totalYakuToFanVector[pid][name] += fan
+            else
+              totalYakuToFanVector[pid][name] = fan
     #console.log("monte carlo", new Date() - @_start)
 
     maxHoraProb = -1 / 0
+    maxHoraProbPid = null
     maxExpectedPoints = -1 / 0
-    maxPid = null
+    maxExpectedPointsPid = null
     for pid in [0...Pai.NUM_IDS]
       if currentVector[pid] > 0
         horaProb = totalHoraVector[pid] / numTries
         expectedPoints = totalPointsVector[pid] / numTries
+        if horaProb > maxHoraProb
+          maxHoraProb = horaProb
+          maxHoraProbPid = pid
         if expectedPoints > maxExpectedPoints
           maxExpectedPoints = expectedPoints
-          maxPid = pid
+          maxExpectedPointsPid = pid
 
     for pai in @player().tehais
       pid = pai.id()
-      console.log("  ", pai.toString(), {
+      stats = {
         prob: totalHoraVector[pid] / numTries,
         avgPt: Math.round(totalPointsVector[pid] / totalHoraVector[pid]),
         expPt: Math.round(totalPointsVector[pid] / numTries),
-      })
+      }
+      for name, fan of totalYakuToFanVector[pid]
+        stats["avgFan_#{name}"] = fan / totalHoraVector[pid]
+      console.log("  ", pai.toString(), stats)
+
+    if maxHoraProbPid != maxExpectedPointsPid
+      gain =
+        (((totalPointsVector[maxExpectedPointsPid] / numTries) / (totalPointsVector[maxHoraProbPid] / numTries)) - 1) *
+            (totalHoraVector[maxHoraProbPid] / numTries)
+      if gain >= 0.01
+        for name, fan of totalYakuToFanVector[maxExpectedPointsPid]
+          testAvgFan = fan / totalHoraVector[maxExpectedPointsPid]
+          baseAvgFan = (totalYakuToFanVector[maxHoraProbPid][name] || 0) / totalHoraVector[maxHoraProbPid]
+          if testAvgFan >= baseAvgFan + 0.1
+            testPaiStr = new Pai(maxExpectedPointsPid).toString()
+            basePaiStr = new Pai(maxHoraProbPid).toString()
+            console.log("  choice based on #{name}: #{testPaiStr} (#{testAvgFan}) vs #{basePaiStr} (#{baseAvgFan})")
 
     # Just returning new Pai(maxPid) doesn't work because it may be a red pai.
     for pai in @player().tehais
-      if pai.id() == maxPid
+      if pai.id() == maxExpectedPointsPid
         console.log("  decidedDahai", pai.toString())
         return pai
     throw "should not happen"
@@ -164,42 +195,94 @@ class ManueAI extends AI
     goal.yakus = []
     goal.fan = 0
 
-    menzen = true  # TODO
-    if menzen
-      goal.yakus.push("reach")
-      ++goal.fan
+    @addYaku(goal, "reach", 1, 0)
 
-    tanyao = Util.all allPais, (pai) ->
-        !pai.isYaochu()
+    tanyao =
+        Util.all allPais, (p) ->
+          !p.isYaochu()
     if tanyao
-      goal.yakus.push("tanyao")
-      ++goal.fan
+      @addYaku(goal, "tanyao", 1)
 
-    # TODO Add janto criteria
-    pinfu = Util.all goal.mentsus, (mentsu) ->
-      mentsu.type != "kotsu"
+    chantaiyao =
+        Util.all goal.mentsus, (m) ->
+          Util.any m.pais, (p) ->
+            p.isYaochu()
+    if chantaiyao
+      @addYaku(goal, "chantaiyao", 2, 1)
+
+    # TODO Consider ryanmen criteria
+    pinfu =
+        Util.all goal.mentsus, (m) =>
+          m.type =="shuntsu" ||
+              (m.type == "toitsu" && @game().yakuhaiFan(m.pais[0], @player()) == 0)
     if pinfu
-      goal.yakus.push("pinfu")
-      ++goal.fan
+      @addYaku(goal, "pinfu", 1, 0)
 
     doras = @game().doras()
+    numDoras = 0
     for pai in allPais
       for dora in doras
         if pai.hasSameSymbol(dora)
-          goal.yakus.push("dora")
-          ++goal.fan
+          ++numDoras
+    @addYaku(goal, "dora", numDoras)
 
     # TODO Discard 5m when it has both 5m and 5mr
+    numAkadoras = 0
     for pai in @player().tehais
       if pai.red() && pai.removeRed().isIn(allPais)
-        goal.yakus.push("akadora")
-        ++goal.fan
+        ++numAkadoras
+    @addYaku(goal, "akadora", numAkadoras)
+
+    yakuhaiFan = 0
+    for mentsu in goal.mentsus
+      if mentsu.type == "kotsu" || mentsu.type == "kantsu"
+        yakuhaiFan += @game().yakuhaiFan(mentsu.pais[0], @player())
+    @addYaku(goal, yakuhaiFan)
+
+    sanshokuDojun =
+        Util.any goal.mentsus, (m1) ->
+          m1.type == "shuntsu" &&
+              Util.all ["m", "p", "s"], (t) ->
+                Util.any goal.mentsus, (m2) ->
+                  m2.type == "shuntsu" &&
+                      m2.pais[0].type() == t &&
+                      m2.pais[0].number() == m1.pais[0].number()
+    if sanshokuDojun
+      @addYaku(goal, "sanshoku_dojun", 2, 1)
+
+    ikkiTsukan =
+        Util.any ["m", "p", "s"], (t) ->
+          Util.all [1, 4, 7], (n) ->
+            Util.any goal.mentsus, (m) ->
+              m.type == "shuntsu" && m.pais[0].type() == t && m.pais[0].number() == n
+    if ikkiTsukan
+      @addYaku(goal, "ikki_tsukan", 2, 1)
+
+    toitoiho =
+        Util.all goal.mentsus, (m) ->
+            m.type != "shuntsu"
+    if toitoiho
+      @addYaku(goal, "toitoiho", 2)
+
+    honiso =
+        Util.any ["m", "p", "s"], (t) ->
+          Util.all goal.mentsus, (m) ->
+            m.pais[0].type() == t || m.pais[0].type() == "t"
+    if honiso
+      @addYaku(goal, "honiso", 3, 2)
 
     # TODO Calculate fu more accurately
     if pinfu
       goal.points = ManueAI.PINFU_FAN_TO_POINTS[goal.fan]
     else
       goal.points = ManueAI.NON_PINFU_FAN_TO_POINTS[goal.fan]
+
+  addYaku: (goal, name, menzenFan, kuiFan = menzenFan) ->
+    # TODO Consider kui
+    fan = menzenFan
+    if fan > 0
+      goal.yakus.push([name, fan])
+      goal.fan += fan
 
 ManueAI.getAllPids = ->
   allPids = []
