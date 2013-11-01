@@ -81,7 +81,9 @@ class ManueAI extends AI
     #console.log("  visiblePaiSet", visiblePaiSet.toString())
     #console.log("invisiblePids", Pai.paisToStr(new Pai(pid) for pid in invisiblePids))
 
-    numTsumos = 18
+    # TODO Estimate this more accurately.
+    numTsumos = Math.floor(@game().numPipais() / 4)
+    console.log("  numTsumos", numTsumos)
     numTries = 1000
     totalHoraVector = (0 for _ in [0...Pai.NUM_IDS])
     totalPointsVector = (0 for _ in [0...Pai.NUM_IDS])
@@ -145,7 +147,7 @@ class ManueAI extends AI
         expPt: Math.round(totalPointsVector[pid] / numTries),
       }
       for name, fan of totalYakuToFanVector[pid]
-        stats["avgFan_#{name}"] = fan / totalHoraVector[pid]
+        stats[name] = Math.floor(fan / totalHoraVector[pid] * 1000) / 1000
       console.log("  ", pai.toString(), stats)
 
     if maxHoraProbPid != maxExpectedPointsPid
@@ -195,20 +197,20 @@ class ManueAI extends AI
     goal.yakus = []
     goal.fan = 0
 
-    @addYaku(goal, "reach", 1, 0)
+    @addYaku(goal, "rc", 1, 0)
 
     tanyao =
         Util.all allPais, (p) ->
           !p.isYaochu()
     if tanyao
-      @addYaku(goal, "tanyao", 1)
+      @addYaku(goal, "ty", 1)
 
     chantaiyao =
         Util.all goal.mentsus, (m) ->
           Util.any m.pais, (p) ->
             p.isYaochu()
     if chantaiyao
-      @addYaku(goal, "chantaiyao", 2, 1)
+      @addYaku(goal, "ct", 2, 1)
 
     # TODO Consider ryanmen criteria
     pinfu =
@@ -216,7 +218,7 @@ class ManueAI extends AI
           m.type =="shuntsu" ||
               (m.type == "toitsu" && @game().yakuhaiFan(m.pais[0], @player()) == 0)
     if pinfu
-      @addYaku(goal, "pinfu", 1, 0)
+      @addYaku(goal, "pf", 1, 0)
 
     doras = @game().doras()
     numDoras = 0
@@ -224,20 +226,28 @@ class ManueAI extends AI
       for dora in doras
         if pai.hasSameSymbol(dora)
           ++numDoras
-    @addYaku(goal, "dora", numDoras)
+    @addYaku(goal, "dr", numDoras)
 
     # TODO Discard 5m when it has both 5m and 5mr
     numAkadoras = 0
     for pai in @player().tehais
       if pai.red() && pai.removeRed().isIn(allPais)
         ++numAkadoras
-    @addYaku(goal, "akadora", numAkadoras)
+    @addYaku(goal, "ad", numAkadoras)
 
     yakuhaiFan = 0
     for mentsu in goal.mentsus
       if mentsu.type == "kotsu" || mentsu.type == "kantsu"
         yakuhaiFan += @game().yakuhaiFan(mentsu.pais[0], @player())
-    @addYaku(goal, yakuhaiFan)
+    @addYaku(goal, "yh", yakuhaiFan)
+
+    ipeko =
+        Util.any goal.mentsus, (m1) ->
+          m1.type == "shuntsu" &&
+              Util.any goal.mentsus, (m2) ->
+                m2 != m1 && m2.type == "shuntsu" && m2.pais[0].hasSameSymbol(m1.pais[0])
+    if ipeko
+      @addYaku(goal, "ip", 1, 0)
 
     sanshokuDojun =
         Util.any goal.mentsus, (m1) ->
@@ -248,7 +258,7 @@ class ManueAI extends AI
                       m2.pais[0].type() == t &&
                       m2.pais[0].number() == m1.pais[0].number()
     if sanshokuDojun
-      @addYaku(goal, "sanshoku_dojun", 2, 1)
+      @addYaku(goal, "sj", 2, 1)
 
     ikkiTsukan =
         Util.any ["m", "p", "s"], (t) ->
@@ -256,20 +266,26 @@ class ManueAI extends AI
             Util.any goal.mentsus, (m) ->
               m.type == "shuntsu" && m.pais[0].type() == t && m.pais[0].number() == n
     if ikkiTsukan
-      @addYaku(goal, "ikki_tsukan", 2, 1)
+      @addYaku(goal, "it", 2, 1)
 
     toitoiho =
         Util.all goal.mentsus, (m) ->
             m.type != "shuntsu"
     if toitoiho
-      @addYaku(goal, "toitoiho", 2)
+      @addYaku(goal, "tt", 2)
 
+    chiniso =
+        Util.any ["m", "p", "s"], (t) ->
+          Util.all goal.mentsus, (m) ->
+            m.pais[0].type() == t
     honiso =
         Util.any ["m", "p", "s"], (t) ->
           Util.all goal.mentsus, (m) ->
             m.pais[0].type() == t || m.pais[0].type() == "t"
-    if honiso
-      @addYaku(goal, "honiso", 3, 2)
+    if chiniso
+      @addYaku(goal, "ci", 6, 5)
+    else if honiso
+      @addYaku(goal, "hi", 3, 2)
 
     # TODO Calculate fu more accurately
     if pinfu

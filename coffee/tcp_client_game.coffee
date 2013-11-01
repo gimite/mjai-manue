@@ -251,6 +251,6 @@ class TCPClientGame
       throw "trying to delete #{pai} which is not in tehais: #{player.tehais}"
     player.tehais.splice(paiIndex, 1)
 
-Util.attrReader(TCPClientGame, ["players", "doraMarkers", "bakaze"])
+Util.attrReader(TCPClientGame, ["players", "doraMarkers", "bakaze", "numPipais"])
 
 module.exports = TCPClientGame
