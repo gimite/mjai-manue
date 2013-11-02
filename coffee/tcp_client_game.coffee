@@ -108,6 +108,7 @@ class TCPClientGame
           player.extraAnpais = null
           player.reachState = null
           player.reachHoIndex = null
+          player.reachSutehaiIndex = null
         when "start_kyoku"
           player.tehais = action.tehais[player.id]
           player.furos = []
@@ -116,6 +117,7 @@ class TCPClientGame
           player.extraAnpais = []
           player.reachState = "none"
           player.reachHoIndex = null
+          player.reachSutehaiIndex = null
 
       if action.actor == player
         switch action.type
@@ -156,6 +158,7 @@ class TCPClientGame
           when "reach_accepted"
             player.reachState = "accepted"
             player.reachHoIndex = player.ho.length - 1
+            player.reachSutehaiIndex = player.sutehais.length - 1
 
       if action.target == player
         switch action.type
@@ -218,6 +221,20 @@ class TCPClientGame
 
   anpais: (player) ->
     return player.sutehais.concat(player.extraAnpais)
+
+  visiblePais: (player) ->
+    pais = []
+    for pai in @_doraMarkers
+      pais.push(pai)
+    for pai in player.tehais
+      pais.push(pai)
+    for p in @_players
+      for pai in p.ho
+        pais.push(pai)
+      for furo in p.furos
+        for pai in furo.pais()
+          pais.push(pai)
+    return pais
 
   doras: ->
     if @_doraMarkers

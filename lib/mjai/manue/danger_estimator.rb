@@ -609,6 +609,21 @@ module Mjai
             end
           end
         end
+
+        def node_to_hash(node)
+          if node
+            return {
+                "average_prob" => node.average_prob,
+                "conf_interval" => node.conf_interval,
+                "num_samples" => node.num_samples,
+                "feature_name" => node.feature_name,
+                "negative" => node_to_hash(node.negative),
+                "positive" => node_to_hash(node.positive),
+            }
+          else
+            return nil
+          end
+        end
         
         def calculate_probabilities(features_path, criteria)
           create_kyoku_probs_map(features_path, criteria)

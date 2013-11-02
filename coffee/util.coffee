@@ -1,18 +1,14 @@
 Util =
 
   attrReader: (cls, names) ->
-    for name in names
-      ((n) ->
-        cls.prototype[n] = (-> this["_#{n}"])
-      )(name)
+    names.forEach (name) ->
+      cls.prototype[name] = (-> this["_#{name}"])
 
   attrAccessor: (cls, names) ->
     Util.attrReader(cls, names)
-    for name in names
-      ((n) ->
-        capital = n.replace(/^./, (s) -> s.toUpperCase())
-        cls.prototype["set#{capital}"] = ((a) -> this["_#{n}"] = a)
-      )(name)
+    names.forEach (name) ->
+      capital = name.replace(/^./, (s) -> s.toUpperCase())
+      cls.prototype["set#{capital}"] = ((a) -> this["_#{name}"] = a)
 
   all: (array, func) ->
     for v in array
@@ -23,5 +19,14 @@ Util =
     for v in array
       if func(v) then return true
     return false
+
+  count: (array, func) ->
+    n = 0
+    for v in array
+      if func(v) then ++n
+    return n
+
+  camelCase: (name) ->
+    return name.replace(/_(.)/g, (_, ch) -> ch.toUpperCase())
 
 module.exports = Util

@@ -1,4 +1,5 @@
 Pai = require("./pai")
+Util = require("./util")
 
 class Action
 
@@ -11,7 +12,7 @@ class Action
   merge: (extraParams) ->
     params = {}
     for name, type of Action.FIELD_SPECS
-      camelName = Action.camelCase(name)
+      camelName = Util.camelCase(name)
       if camelName in this
         params[camelName] = this[camelName]
     for k, v of extraParams
@@ -21,7 +22,7 @@ class Action
   toJson: ->
     hash = {}
     for name, type of Action.FIELD_SPECS
-      obj = this[Action.camelCase(name)]
+      obj = this[Util.camelCase(name)]
       if obj == undefined then continue
       switch type
         when "number", "string", "boolean", "numbers", "strings", "booleans", "yakus"
@@ -77,7 +78,7 @@ Action.fromJson = (json, game) ->
   for name, plain of hash
     type = Action.FIELD_SPECS[name]
     if type
-      params[Action.camelCase(name)] = Action.plainToObj(plain, type, game)
+      params[Util.camelCase(name)] = Action.plainToObj(plain, type, game)
   return new Action(params)
 
 Action.plainToObj = (plain, type, game) ->
@@ -97,8 +98,5 @@ Action.plainToObj = (plain, type, game) ->
 
 Action.plainsToObjs = (plains, type, game) ->
   return (Action.plainToObj(plain, type, game) for plain in plains)
-
-Action.camelCase = (name) ->
-  return name.replace(/_(.)/, (_, ch) -> ch.toUpperCase())
 
 module.exports = Action

@@ -2,6 +2,7 @@
 
 $LOAD_PATH.unshift(File.dirname(__FILE__) + "/../lib")
 
+require "json"
 require "pp"
 require "mjai/manue/danger_estimator"
 
@@ -295,6 +296,12 @@ case action
   when "dump_tree"
     root = open(ARGV[0], "rb"){ |f| Marshal.load(f) }
     estimator.render_decision_tree(root, "all")
+    
+  when "dump_tree_json"
+    root = open(ARGV[0], "rb"){ |f| Marshal.load(f) }
+    open(@opts["o"], "w") do |f|
+      JSON.dump(estimator.node_to_hash(root), f)
+    end
     
   else
     raise("unknown action")

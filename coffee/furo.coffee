@@ -11,6 +11,6 @@ class Furo
   pais: ->
     return (if @_taken then [@_taken] else []).concat(@_consumed)
 
-Util.attrReader(Furo, "type", "taken", "consumed", "target")
+Util.attrReader(Furo, ["type", "taken", "consumed", "target"])
 
 module.exports = Furo

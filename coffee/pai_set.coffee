@@ -19,6 +19,12 @@ class PaiSet
         pais.push(new Pai(pid))
     return pais
 
+  count: (pai) ->
+    return @_array[pai.id()]
+
+  has: (pai) ->
+    return @_array[pai.id()] > 0
+
   addPai: (pai, n) ->
     @_array[pai.id()] += n
 

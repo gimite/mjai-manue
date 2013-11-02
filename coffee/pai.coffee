@@ -35,8 +35,10 @@ class Pai
       type_index = Pai.TYPE_STRS.indexOf(type)
       if type_index < 0
         throw "Bad type: #{type}"
-      if typeof(number) != "number"
-        throw "number must be number: #{number}"
+      if typeof(number) != "number" || number != Math.floor(number)
+        throw "number must be an integer: #{number}"
+      if number < 1 || number > 9 
+        throw "number out of range: #{number}"
       if @_red != true && @_red != false
         throw "red must be boolean: #{@_red}"
       @_id = type_index * 9 + (number - 1)
@@ -78,6 +80,14 @@ class Pai
 
   removeRed: ->
     return new Pai(@_id)
+
+  next: (n) ->
+    type = @type()
+    number = @number() + n
+    if type != "t" && number >= 1 && number <= 9
+      return new Pai(type, number)
+    else
+      return null
 
   toString: ->
     type = @type()

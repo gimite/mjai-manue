@@ -3,15 +3,20 @@ Pai = require("./pai")
 PaiSet = require("./pai_set")
 ShantenAnalysis = require("./shanten_analysis")
 BitVector = require("./bit_vector")
+DangerEstimator = require("./danger_estimator")
 Util = require("./util")
 
 class ManueAI extends AI
+
+  constructor: ->
+    @_dangerEstimator = new DangerEstimator()
 
   respondToAction: (action) ->
 
     #console.log(action, action.actor, @player, action.type)
 
     if action.actor == @player()
+
       switch action.type
         when "tsumo", "chi", "pon", "reach"
           # @_start = new Date()
@@ -34,7 +39,9 @@ class ManueAI extends AI
                 type: "dahai",
                 pai: dahai,
                 tsumogiri: action.type == "tsumo" && dahai.equal(action.pai))
+    
     else
+
       switch action.type
         when "dahai"
           if @game().canHora(@player())
@@ -47,128 +54,172 @@ class ManueAI extends AI
 
   decideDahai: (analysis) ->
 
-    console.log("  shanten", analysis.shanten())
-    currentVector = new PaiSet(@player().tehais).array()
-    goals = []
-    for goal in analysis.goals()
-      # If it's tenpai, tenpai must be kept because it has reached.
-      # If shanten > 3, including goals with extra pais is too slow.
-      if (analysis.shanten() >= 1 && analysis.shanten() <= 3) ||
-          goal.shanten == analysis.shanten()
-        goal.requiredBitVectors = @countVectorToBitVectors(goal.requiredVector)
-        @calculateFan(goal)
-        goals.push(goal)
-    console.log("  goals", goals.length)
-    #console.log("requiredBitVectors", new Date() - @_start)
-
-    # for goal in goals
-    #   console.log("goalVector", @countVectorToStr(goal.countVector))
-    #   console.log({fan: goal.fan, points: goal.points, yakus: goal.yakus})
-      # console.log("goalRequiredVector", countVectorToStr(goal.requiredVector))
-      # console.log("goalThrowableVector", countVectorToStr(goal.throwableVector))
-      # console.log("goalMentsus", ([m.type, new Pai(m.firstPid).toString()] for m in goal.mentsus))
-
-    visiblePaiSet = new PaiSet()
-    visiblePaiSet.addPais(@game().doraMarkers())
-    visiblePaiSet.addPais(@player().tehais)
+    possibleDahais = []
+    for pai in @player().tehais
+      if Util.all possibleDahais, ((p) -> !p.equal(pai))
+        possibleDahais.push(pai)
+    safeProbs = {}
+    for pai in possibleDahais
+      safeProbs[pai.toString()] = 1
+    hasReacher = false
     for player in @game().players()
-      visiblePaiSet.addPais(player.ho)
-      for furo in player.furos
-        visiblePaiSet.addPais(furo.pais())
-    invisiblePaiSet = PaiSet.getAll()
-    invisiblePaiSet.removePaiSet(visiblePaiSet)
-    invisiblePids = (pai.id() for pai in invisiblePaiSet.toPais())
-    #console.log("  visiblePaiSet", visiblePaiSet.toString())
-    #console.log("invisiblePids", Pai.paisToStr(new Pai(pid) for pid in invisiblePids))
+      if player != @player() && player.reachState == "accepted"
+        hasReacher = true
+        scene = @_dangerEstimator.getScene(@game(), @player(), player)
+        probInfos = {}
+        for pai in possibleDahais
+          if scene.anpai(pai)
+            probInfo = {anpai: true}
+            safeProb = 1
+          else
+            probInfo = @_dangerEstimator.estimateProb(scene, pai)
+            features2 = []
+            for feature in probInfo.features
+              features2.push("#{feature.name} #{feature.value}")
+            probInfo.features = features2
+            safeProb = 1 - probInfo.prob
+          safeProbs[pai.toString()] *= safeProb
+          probInfos[pai.toString()] = probInfo
+        console.log("danger", probInfos)
 
-    # TODO Estimate this more accurately.
-    numTsumos = Math.floor(@game().numPipais() / 4)
-    console.log("  numTsumos", numTsumos)
-    numTries = 1000
-    totalHoraVector = (0 for _ in [0...Pai.NUM_IDS])
-    totalPointsVector = (0 for _ in [0...Pai.NUM_IDS])
-    totalYakuToFanVector = ({} for _ in [0...Pai.NUM_IDS])
-    for i in [0...numTries]
-      @shuffle(invisiblePids, numTsumos)
-      tsumoVector = new PaiSet(new Pai(pid) for pid in invisiblePids[0...numTsumos]).array()
-      tsumoBitVectors = @countVectorToBitVectors(tsumoVector)
-      horaVector = (0 for _ in [0...Pai.NUM_IDS])
-      pointsVector = (0 for _ in [0...Pai.NUM_IDS])
-      yakuToFanVector = ({} for _ in [0...Pai.NUM_IDS])
-      #goalVector = (null for _ in [0...Pai.NUM_IDS])
-      for goal in goals
-        achieved = true
-        for i in [0...tsumoBitVectors.length]
-          if !goal.requiredBitVectors[i].isSubsetOf(tsumoBitVectors[i])
-            achieved = false
-            break
-        if achieved
-          for pid in [0...Pai.NUM_IDS]
-            if goal.throwableVector[pid] > 0
-              horaVector[pid] = 1
-              if goal.points > pointsVector[pid]
-                pointsVector[pid] = goal.points
-                yakuToFanVector[pid] = {}
-                for yaku in goal.yakus
-                  [name, fan] = yaku
-                  yakuToFanVector[pid][name] = fan
-              #goalVector[pid] = goal
+    if hasReacher && analysis.shanten() > 0
+
+      maxSafeProb = -1 / 0
+      maxPai = null
+      for pai in possibleDahais
+        safeProb = safeProbs[pai.toString()]
+        console.log("safeProb", pai.toString(), safeProb)
+        if safeProb > maxSafeProb
+          maxSafeProb = safeProb
+          maxPai = pai
+      # TODO Return pai with best hora prob among equally safe pais.
+      console.log("  decidedDahai", maxPai.toString())
+      return maxPai
+
+    else
+
+      console.log("  shanten", analysis.shanten())
+      currentVector = new PaiSet(@player().tehais).array()
+      goals = []
+      for goal in analysis.goals()
+        # If it's tenpai, tenpai must be kept because it has reached.
+        # If shanten > 3, including goals with extra pais is too slow.
+        if (analysis.shanten() >= 1 && analysis.shanten() <= 3) ||
+            goal.shanten == analysis.shanten()
+          goal.requiredBitVectors = @countVectorToBitVectors(goal.requiredVector)
+          @calculateFan(goal)
+          goals.push(goal)
+      console.log("  goals", goals.length)
+      #console.log("requiredBitVectors", new Date() - @_start)
+
+      # for goal in goals
+      #   console.log("goalVector", @countVectorToStr(goal.countVector))
+      #   console.log({fan: goal.fan, points: goal.points, yakus: goal.yakus})
+        # console.log("goalRequiredVector", countVectorToStr(goal.requiredVector))
+        # console.log("goalThrowableVector", countVectorToStr(goal.throwableVector))
+        # console.log("goalMentsus", ([m.type, new Pai(m.firstPid).toString()] for m in goal.mentsus))
+
+      visiblePaiSet = new PaiSet()
+      visiblePaiSet.addPais(@game().doraMarkers())
+      visiblePaiSet.addPais(@player().tehais)
+      for player in @game().players()
+        visiblePaiSet.addPais(player.ho)
+        for furo in player.furos
+          visiblePaiSet.addPais(furo.pais())
+      invisiblePaiSet = PaiSet.getAll()
+      invisiblePaiSet.removePaiSet(visiblePaiSet)
+      invisiblePids = (pai.id() for pai in invisiblePaiSet.toPais())
+      #console.log("  visiblePaiSet", visiblePaiSet.toString())
+      #console.log("invisiblePids", Pai.paisToStr(new Pai(pid) for pid in invisiblePids))
+
+      # TODO Estimate this more accurately.
+      numTsumos = Math.floor(@game().numPipais() / 4)
+      console.log("  numTsumos", numTsumos)
+      numTries = 1000
+      totalHoraVector = (0 for _ in [0...Pai.NUM_IDS])
+      totalPointsVector = (0 for _ in [0...Pai.NUM_IDS])
+      totalYakuToFanVector = ({} for _ in [0...Pai.NUM_IDS])
+      for i in [0...numTries]
+        @shuffle(invisiblePids, numTsumos)
+        tsumoVector = new PaiSet(new Pai(pid) for pid in invisiblePids[0...numTsumos]).array()
+        tsumoBitVectors = @countVectorToBitVectors(tsumoVector)
+        horaVector = (0 for _ in [0...Pai.NUM_IDS])
+        pointsVector = (0 for _ in [0...Pai.NUM_IDS])
+        yakuToFanVector = ({} for _ in [0...Pai.NUM_IDS])
+        #goalVector = (null for _ in [0...Pai.NUM_IDS])
+        for goal in goals
+          achieved = true
+          for i in [0...tsumoBitVectors.length]
+            if !goal.requiredBitVectors[i].isSubsetOf(tsumoBitVectors[i])
+              achieved = false
+              break
+          if achieved
+            for pid in [0...Pai.NUM_IDS]
+              if goal.throwableVector[pid] > 0
+                horaVector[pid] = 1
+                if goal.points > pointsVector[pid]
+                  pointsVector[pid] = goal.points
+                  yakuToFanVector[pid] = {}
+                  for yaku in goal.yakus
+                    [name, fan] = yaku
+                    yakuToFanVector[pid][name] = fan
+                #goalVector[pid] = goal
+        for pid in [0...Pai.NUM_IDS]
+          if horaVector[pid] == 1
+            ++totalHoraVector[pid]
+            totalPointsVector[pid] += pointsVector[pid]
+            for name, fan of yakuToFanVector[pid]
+              if name of totalYakuToFanVector[pid]
+                totalYakuToFanVector[pid][name] += fan
+              else
+                totalYakuToFanVector[pid][name] = fan
+      #console.log("monte carlo", new Date() - @_start)
+
+      maxHoraProb = -1 / 0
+      maxHoraProbPid = null
+      maxExpectedPoints = -1 / 0
+      maxExpectedPointsPid = null
       for pid in [0...Pai.NUM_IDS]
-        if horaVector[pid] == 1
-          ++totalHoraVector[pid]
-          totalPointsVector[pid] += pointsVector[pid]
-          for name, fan of yakuToFanVector[pid]
-            if name of totalYakuToFanVector[pid]
-              totalYakuToFanVector[pid][name] += fan
-            else
-              totalYakuToFanVector[pid][name] = fan
-    #console.log("monte carlo", new Date() - @_start)
+        if currentVector[pid] > 0
+          horaProb = totalHoraVector[pid] / numTries
+          expectedPoints = totalPointsVector[pid] / numTries
+          if horaProb > maxHoraProb
+            maxHoraProb = horaProb
+            maxHoraProbPid = pid
+          if expectedPoints > maxExpectedPoints
+            maxExpectedPoints = expectedPoints
+            maxExpectedPointsPid = pid
 
-    maxHoraProb = -1 / 0
-    maxHoraProbPid = null
-    maxExpectedPoints = -1 / 0
-    maxExpectedPointsPid = null
-    for pid in [0...Pai.NUM_IDS]
-      if currentVector[pid] > 0
-        horaProb = totalHoraVector[pid] / numTries
-        expectedPoints = totalPointsVector[pid] / numTries
-        if horaProb > maxHoraProb
-          maxHoraProb = horaProb
-          maxHoraProbPid = pid
-        if expectedPoints > maxExpectedPoints
-          maxExpectedPoints = expectedPoints
-          maxExpectedPointsPid = pid
+      for pai in @player().tehais
+        pid = pai.id()
+        stats = {
+          prob: totalHoraVector[pid] / numTries,
+          avgPt: Math.round(totalPointsVector[pid] / totalHoraVector[pid]),
+          expPt: Math.round(totalPointsVector[pid] / numTries),
+        }
+        for name, fan of totalYakuToFanVector[pid]
+          stats[name] = Math.floor(fan / totalHoraVector[pid] * 1000) / 1000
+        console.log("  ", pai.toString(), stats)
 
-    for pai in @player().tehais
-      pid = pai.id()
-      stats = {
-        prob: totalHoraVector[pid] / numTries,
-        avgPt: Math.round(totalPointsVector[pid] / totalHoraVector[pid]),
-        expPt: Math.round(totalPointsVector[pid] / numTries),
-      }
-      for name, fan of totalYakuToFanVector[pid]
-        stats[name] = Math.floor(fan / totalHoraVector[pid] * 1000) / 1000
-      console.log("  ", pai.toString(), stats)
+      if maxHoraProbPid != maxExpectedPointsPid
+        gain =
+          (((totalPointsVector[maxExpectedPointsPid] / numTries) / (totalPointsVector[maxHoraProbPid] / numTries)) - 1) *
+              (totalHoraVector[maxHoraProbPid] / numTries)
+        if gain >= 0.01
+          for name, fan of totalYakuToFanVector[maxExpectedPointsPid]
+            testAvgFan = fan / totalHoraVector[maxExpectedPointsPid]
+            baseAvgFan = (totalYakuToFanVector[maxHoraProbPid][name] || 0) / totalHoraVector[maxHoraProbPid]
+            if testAvgFan >= baseAvgFan + 0.1
+              testPaiStr = new Pai(maxExpectedPointsPid).toString()
+              basePaiStr = new Pai(maxHoraProbPid).toString()
+              console.log("  choice based on #{name}: #{testPaiStr} (#{testAvgFan}) vs #{basePaiStr} (#{baseAvgFan})")
 
-    if maxHoraProbPid != maxExpectedPointsPid
-      gain =
-        (((totalPointsVector[maxExpectedPointsPid] / numTries) / (totalPointsVector[maxHoraProbPid] / numTries)) - 1) *
-            (totalHoraVector[maxHoraProbPid] / numTries)
-      if gain >= 0.01
-        for name, fan of totalYakuToFanVector[maxExpectedPointsPid]
-          testAvgFan = fan / totalHoraVector[maxExpectedPointsPid]
-          baseAvgFan = (totalYakuToFanVector[maxHoraProbPid][name] || 0) / totalHoraVector[maxHoraProbPid]
-          if testAvgFan >= baseAvgFan + 0.1
-            testPaiStr = new Pai(maxExpectedPointsPid).toString()
-            basePaiStr = new Pai(maxHoraProbPid).toString()
-            console.log("  choice based on #{name}: #{testPaiStr} (#{testAvgFan}) vs #{basePaiStr} (#{baseAvgFan})")
-
-    # Just returning new Pai(maxPid) doesn't work because it may be a red pai.
-    for pai in @player().tehais
-      if pai.id() == maxExpectedPointsPid
-        console.log("  decidedDahai", pai.toString())
-        return pai
-    throw "should not happen"
+      # Just returning new Pai(maxPid) doesn't work because it may be a red pai.
+      for pai in @player().tehais
+        if pai.id() == maxExpectedPointsPid
+          console.log("  decidedDahai", pai.toString())
+          return pai
+      throw "should not happen"
 
   shuffle: (array, n = array.length) ->
     for i in [0...n]
@@ -197,20 +248,20 @@ class ManueAI extends AI
     goal.yakus = []
     goal.fan = 0
 
-    @addYaku(goal, "rc", 1, 0)
+    @addYaku(goal, "reach", 1, 0)
 
-    tanyao =
+    tanyaochu =
         Util.all allPais, (p) ->
           !p.isYaochu()
-    if tanyao
-      @addYaku(goal, "ty", 1)
+    if tanyaochu
+      @addYaku(goal, "tyc", 1)
 
     chantaiyao =
         Util.all goal.mentsus, (m) ->
           Util.any m.pais, (p) ->
             p.isYaochu()
     if chantaiyao
-      @addYaku(goal, "ct", 2, 1)
+      @addYaku(goal, "cty", 2, 1)
 
     # TODO Consider ryanmen criteria
     pinfu =
@@ -233,13 +284,13 @@ class ManueAI extends AI
     for pai in @player().tehais
       if pai.red() && pai.removeRed().isIn(allPais)
         ++numAkadoras
-    @addYaku(goal, "ad", numAkadoras)
+    @addYaku(goal, "adr", numAkadoras)
 
     yakuhaiFan = 0
     for mentsu in goal.mentsus
       if mentsu.type == "kotsu" || mentsu.type == "kantsu"
         yakuhaiFan += @game().yakuhaiFan(mentsu.pais[0], @player())
-    @addYaku(goal, "yh", yakuhaiFan)
+    @addYaku(goal, "ykh", yakuhaiFan)
 
     ipeko =
         Util.any goal.mentsus, (m1) ->
@@ -247,7 +298,7 @@ class ManueAI extends AI
               Util.any goal.mentsus, (m2) ->
                 m2 != m1 && m2.type == "shuntsu" && m2.pais[0].hasSameSymbol(m1.pais[0])
     if ipeko
-      @addYaku(goal, "ip", 1, 0)
+      @addYaku(goal, "ipk", 1, 0)
 
     sanshokuDojun =
         Util.any goal.mentsus, (m1) ->
@@ -258,7 +309,7 @@ class ManueAI extends AI
                       m2.pais[0].type() == t &&
                       m2.pais[0].number() == m1.pais[0].number()
     if sanshokuDojun
-      @addYaku(goal, "sj", 2, 1)
+      @addYaku(goal, "ssj", 2, 1)
 
     ikkiTsukan =
         Util.any ["m", "p", "s"], (t) ->
@@ -266,13 +317,13 @@ class ManueAI extends AI
             Util.any goal.mentsus, (m) ->
               m.type == "shuntsu" && m.pais[0].type() == t && m.pais[0].number() == n
     if ikkiTsukan
-      @addYaku(goal, "it", 2, 1)
+      @addYaku(goal, "ikt", 2, 1)
 
     toitoiho =
         Util.all goal.mentsus, (m) ->
             m.type != "shuntsu"
     if toitoiho
-      @addYaku(goal, "tt", 2)
+      @addYaku(goal, "tth", 2)
 
     chiniso =
         Util.any ["m", "p", "s"], (t) ->
@@ -283,9 +334,9 @@ class ManueAI extends AI
           Util.all goal.mentsus, (m) ->
             m.pais[0].type() == t || m.pais[0].type() == "t"
     if chiniso
-      @addYaku(goal, "ci", 6, 5)
+      @addYaku(goal, "cis", 6, 5)
     else if honiso
-      @addYaku(goal, "hi", 3, 2)
+      @addYaku(goal, "his", 3, 2)
 
     # TODO Calculate fu more accurately
     if pinfu
