@@ -23,24 +23,24 @@ class Pai
             number = number
             @_red = false
           else
-            throw "Unknown pai string: #{arg}"
+            throw new Error("Unknown pai string: #{arg}")
       when 2, 3
         [type, number, @_red] = arguments
         if @_red == undefined then @_red = false
       else
-        throw "Wrong number of arguments"
+        throw new Error("Wrong number of arguments")
 
     if @_id != undefined
     else if type != null || number != null
       type_index = Pai.TYPE_STRS.indexOf(type)
       if type_index < 0
-        throw "Bad type: #{type}"
+        throw new Error("Bad type: #{type}")
       if typeof(number) != "number" || number != Math.floor(number)
-        throw "number must be an integer: #{number}"
+        throw new Error("number must be an integer: #{number}")
       if number < 1 || number > 9 
-        throw "number out of range: #{number}"
+        throw new Error("number out of range: #{number}")
       if @_red != true && @_red != false
-        throw "red must be boolean: #{@_red}"
+        throw new Error("red must be boolean: #{@_red}")
       @_id = type_index * 9 + (number - 1)
     else
       @_id = null

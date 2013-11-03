@@ -48,13 +48,13 @@ class MockGame
     if player == @_players[1]
       return @_anpais
     else
-      throw "not implemented"
+      throw new Error("not implemented")
 
   visiblePais: (player) ->
     if player == @_players[0]
       return @_visiblePais
     else
-      throw "not implemented"
+      throw new Error("not implemented")
 
   yakuhaiFan: (pai, player) ->
     if pai.type() == "t" && pai.number() >= 5

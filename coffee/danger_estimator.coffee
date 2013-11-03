@@ -111,14 +111,17 @@ class Scene
   jikaze: (pai) ->
     return pai.hasSameSymbol(@_targetKaze)
 
+  # n can be negative.
   _nOuterPrereachSutehai: (pai, n) ->
-    if pai.type() == "t"
+    if pai.type() == "t" || pai.number() == 5
       return false
-    else if pai.number() < 6 - n || pai.number() > 4 + n
-      nInnerPai = new Pai(pai.type(), if pai.number() < 5 then pai.number() + n else pai.number() - n)
-      return @_prereachSutehaiSet.has(nInnerPai)
     else
-      return false
+      nInnerNumber = (if pai.number() < 5 then pai.number() + n else pai.number() - n)
+      if nInnerNumber >= 1 && nInnerNumber <= 9 &&
+          ((pai.number() < 5 && nInnerNumber <= 5) || (pai.number() > 5 && nInnerNumber >= 5))
+        return @_prereachSutehaiSet.has(new Pai(pai.type(), nInnerNumber))
+      else
+        return false
 
   _nOrMoreOfNeighborsInPrereachSutehais: (pai, n, neighborDistance) ->
     if pai.type() == "t"

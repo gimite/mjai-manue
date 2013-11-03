@@ -146,7 +146,7 @@ class TCPClientGame
                 ponIndex = i
                 break
             if ponIndex == null
-              throw "should not happen"
+              throw new Error("should not happen")
             player.furos[ponIndex] = new Furo({
                 type: "kakan",
                 taken: player.furos[ponIndex].taken,
@@ -165,7 +165,7 @@ class TCPClientGame
           when "chi", "pon", "daiminkan"
             pai = player.ho.pop()
             if pai != action.pai
-              throw "should not happen"
+              throw new Error("should not happen")
 
       if action.scores
         player.score = action.scores[player.id]
@@ -265,7 +265,7 @@ class TCPClientGame
         paiIndex = i
         break
     if paiIndex == null
-      throw "trying to delete #{pai} which is not in tehais: #{player.tehais}"
+      throw new Error("trying to delete #{pai} which is not in tehais: #{player.tehais}")
     player.tehais.splice(paiIndex, 1)
 
 Util.attrReader(TCPClientGame, ["players", "doraMarkers", "bakaze", "numPipais"])

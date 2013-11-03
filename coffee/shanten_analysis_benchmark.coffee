@@ -88,4 +88,4 @@ fs.readFileSync("shanten_benchmark_data.num.txt").toString("utf-8").split(/\n/).
   expectedShantensu = parseInt(row[row.length - 1])
   result = process(pids)
   if result.shantensu != expectedShantensu
-    throw "Shantensu mismatch: #{result.shantensu} != #{expectedShantensu}"
+    throw new Error("Shantensu mismatch: #{result.shantensu} != #{expectedShantensu}")

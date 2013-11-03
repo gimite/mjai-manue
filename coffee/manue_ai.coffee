@@ -213,7 +213,7 @@ class ManueAI extends AI
       if pai.id() == maxExpectedPointsPid
         console.log("  decidedDahai", pai.toString())
         return pai
-    throw "should not happen"
+    throw new Error("should not happen")
 
   shuffle: (array, n = array.length) ->
     for i in [0...n]

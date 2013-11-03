@@ -36,7 +36,7 @@ class Action
         when "pais_list"
           plain = ((g.toString() for g in c) for c in obj)
         else
-          throw "unknown type"
+          throw new Error("unknown type")
       hash[name] = plain
     return JSON.stringify(hash)
 
@@ -94,7 +94,7 @@ Action.plainToObj = (plain, type, game) ->
     when "pais_list"
       return Action.plainsToObjs(plain, "pais", game)
     else
-      throw "unknown type: #{type}"
+      throw new Error("unknown type: #{type}")
 
 Action.plainsToObjs = (plains, type, game) ->
   return (Action.plainToObj(plain, type, game) for plain in plains)
