@@ -53,11 +53,16 @@ class ManueAI extends AI
     return null
 
   decideDahai: (analysis) ->
+    candDahais = @getSafestDahais(analysis)
+    return @getDahaiToMaximizeHoraProb(analysis, candDahais)
+
+  getSafestDahais: (analysis) ->
 
     possibleDahais = []
     for pai in @player().tehais
       if Util.all possibleDahais, ((p) -> !p.equal(pai))
         possibleDahais.push(pai)
+
     safeProbs = {}
     for pai in possibleDahais
       safeProbs[pai.toString()] = 1
@@ -83,7 +88,6 @@ class ManueAI extends AI
         console.log("danger", probInfos)
 
     if hasReacher && analysis.shanten() > 0
-
       maxSafeProb = -1 / 0
       maxPai = null
       for pai in possibleDahais
@@ -91,135 +95,125 @@ class ManueAI extends AI
         console.log("safeProb", pai.toString(), safeProb)
         if safeProb > maxSafeProb
           maxSafeProb = safeProb
-          maxPai = pai
-      # TODO Return pai with best hora prob among equally safe pais.
-      console.log("  decidedDahai", maxPai.toString())
-      return maxPai
-
+      return (pai for pai in possibleDahais when safeProbs[pai.toString()] == maxSafeProb)
     else
+      return possibleDahais
 
-      console.log("  shanten", analysis.shanten())
-      currentVector = new PaiSet(@player().tehais).array()
-      goals = []
-      for goal in analysis.goals()
-        # If it's tenpai, tenpai must be kept because it has reached.
-        # If shanten > 3, including goals with extra pais is too slow.
-        if (analysis.shanten() >= 1 && analysis.shanten() <= 3) ||
-            goal.shanten == analysis.shanten()
-          goal.requiredBitVectors = @countVectorToBitVectors(goal.requiredVector)
-          @calculateFan(goal)
-          goals.push(goal)
-      console.log("  goals", goals.length)
-      #console.log("requiredBitVectors", new Date() - @_start)
+  getDahaiToMaximizeHoraProb: (analysis, candDahais) ->
 
-      # for goal in goals
-      #   console.log("goalVector", @countVectorToStr(goal.countVector))
-      #   console.log({fan: goal.fan, points: goal.points, yakus: goal.yakus})
-        # console.log("goalRequiredVector", countVectorToStr(goal.requiredVector))
-        # console.log("goalThrowableVector", countVectorToStr(goal.throwableVector))
-        # console.log("goalMentsus", ([m.type, new Pai(m.firstPid).toString()] for m in goal.mentsus))
+    console.log("  shanten", analysis.shanten())
+    currentVector = new PaiSet(@player().tehais).array()
+    goals = []
+    for goal in analysis.goals()
+      # If it's tenpai, tenpai must be kept because it has reached.
+      # If shanten > 3, including goals with extra pais is too slow.
+      if (analysis.shanten() >= 1 && analysis.shanten() <= 3) ||
+          goal.shanten == analysis.shanten()
+        goal.requiredBitVectors = @countVectorToBitVectors(goal.requiredVector)
+        @calculateFan(goal)
+        goals.push(goal)
+    console.log("  goals", goals.length)
+    #console.log("requiredBitVectors", new Date() - @_start)
 
-      visiblePaiSet = new PaiSet()
-      visiblePaiSet.addPais(@game().doraMarkers())
-      visiblePaiSet.addPais(@player().tehais)
-      for player in @game().players()
-        visiblePaiSet.addPais(player.ho)
-        for furo in player.furos
-          visiblePaiSet.addPais(furo.pais())
-      invisiblePaiSet = PaiSet.getAll()
-      invisiblePaiSet.removePaiSet(visiblePaiSet)
-      invisiblePids = (pai.id() for pai in invisiblePaiSet.toPais())
-      #console.log("  visiblePaiSet", visiblePaiSet.toString())
-      #console.log("invisiblePids", Pai.paisToStr(new Pai(pid) for pid in invisiblePids))
+    # for goal in goals
+    #   console.log("goalVector", @countVectorToStr(goal.countVector))
+    #   console.log({fan: goal.fan, points: goal.points, yakus: goal.yakus})
+      # console.log("goalRequiredVector", countVectorToStr(goal.requiredVector))
+      # console.log("goalThrowableVector", countVectorToStr(goal.throwableVector))
+      # console.log("goalMentsus", ([m.type, new Pai(m.firstPid).toString()] for m in goal.mentsus))
 
-      # TODO Estimate this more accurately.
-      numTsumos = Math.floor(@game().numPipais() / 4)
-      console.log("  numTsumos", numTsumos)
-      numTries = 1000
-      totalHoraVector = (0 for _ in [0...Pai.NUM_IDS])
-      totalPointsVector = (0 for _ in [0...Pai.NUM_IDS])
-      totalYakuToFanVector = ({} for _ in [0...Pai.NUM_IDS])
-      for i in [0...numTries]
-        @shuffle(invisiblePids, numTsumos)
-        tsumoVector = new PaiSet(new Pai(pid) for pid in invisiblePids[0...numTsumos]).array()
-        tsumoBitVectors = @countVectorToBitVectors(tsumoVector)
-        horaVector = (0 for _ in [0...Pai.NUM_IDS])
-        pointsVector = (0 for _ in [0...Pai.NUM_IDS])
-        yakuToFanVector = ({} for _ in [0...Pai.NUM_IDS])
-        #goalVector = (null for _ in [0...Pai.NUM_IDS])
-        for goal in goals
-          achieved = true
-          for i in [0...tsumoBitVectors.length]
-            if !goal.requiredBitVectors[i].isSubsetOf(tsumoBitVectors[i])
-              achieved = false
-              break
-          if achieved
-            for pid in [0...Pai.NUM_IDS]
-              if goal.throwableVector[pid] > 0
-                horaVector[pid] = 1
-                if goal.points > pointsVector[pid]
-                  pointsVector[pid] = goal.points
-                  yakuToFanVector[pid] = {}
-                  for yaku in goal.yakus
-                    [name, fan] = yaku
-                    yakuToFanVector[pid][name] = fan
-                #goalVector[pid] = goal
-        for pid in [0...Pai.NUM_IDS]
-          if horaVector[pid] == 1
-            ++totalHoraVector[pid]
-            totalPointsVector[pid] += pointsVector[pid]
-            for name, fan of yakuToFanVector[pid]
-              if name of totalYakuToFanVector[pid]
-                totalYakuToFanVector[pid][name] += fan
-              else
-                totalYakuToFanVector[pid][name] = fan
-      #console.log("monte carlo", new Date() - @_start)
+    visiblePaiSet = new PaiSet(@game().visiblePais(@player()))
+    invisiblePaiSet = PaiSet.getAll()
+    invisiblePaiSet.removePaiSet(visiblePaiSet)
+    invisiblePids = (pai.id() for pai in invisiblePaiSet.toPais())
+    #console.log("  visiblePaiSet", visiblePaiSet.toString())
+    #console.log("invisiblePids", Pai.paisToStr(new Pai(pid) for pid in invisiblePids))
 
-      maxHoraProb = -1 / 0
-      maxHoraProbPid = null
-      maxExpectedPoints = -1 / 0
-      maxExpectedPointsPid = null
+    # TODO Estimate this more accurately.
+    numTsumos = Math.floor(@game().numPipais() / 4)
+    console.log("  numTsumos", numTsumos)
+    numTries = 1000
+    totalHoraVector = (0 for _ in [0...Pai.NUM_IDS])
+    totalPointsVector = (0 for _ in [0...Pai.NUM_IDS])
+    totalYakuToFanVector = ({} for _ in [0...Pai.NUM_IDS])
+    for i in [0...numTries]
+      @shuffle(invisiblePids, numTsumos)
+      tsumoVector = new PaiSet(new Pai(pid) for pid in invisiblePids[0...numTsumos]).array()
+      tsumoBitVectors = @countVectorToBitVectors(tsumoVector)
+      horaVector = (0 for _ in [0...Pai.NUM_IDS])
+      pointsVector = (0 for _ in [0...Pai.NUM_IDS])
+      yakuToFanVector = ({} for _ in [0...Pai.NUM_IDS])
+      #goalVector = (null for _ in [0...Pai.NUM_IDS])
+      for goal in goals
+        achieved = true
+        for i in [0...tsumoBitVectors.length]
+          if !goal.requiredBitVectors[i].isSubsetOf(tsumoBitVectors[i])
+            achieved = false
+            break
+        if achieved
+          for pid in [0...Pai.NUM_IDS]
+            if goal.throwableVector[pid] > 0
+              horaVector[pid] = 1
+              if goal.points > pointsVector[pid]
+                pointsVector[pid] = goal.points
+                yakuToFanVector[pid] = {}
+                for yaku in goal.yakus
+                  [name, fan] = yaku
+                  yakuToFanVector[pid][name] = fan
+              #goalVector[pid] = goal
       for pid in [0...Pai.NUM_IDS]
-        if currentVector[pid] > 0
-          horaProb = totalHoraVector[pid] / numTries
-          expectedPoints = totalPointsVector[pid] / numTries
-          if horaProb > maxHoraProb
-            maxHoraProb = horaProb
-            maxHoraProbPid = pid
-          if expectedPoints > maxExpectedPoints
-            maxExpectedPoints = expectedPoints
-            maxExpectedPointsPid = pid
+        if horaVector[pid] == 1
+          ++totalHoraVector[pid]
+          totalPointsVector[pid] += pointsVector[pid]
+          for name, fan of yakuToFanVector[pid]
+            if name of totalYakuToFanVector[pid]
+              totalYakuToFanVector[pid][name] += fan
+            else
+              totalYakuToFanVector[pid][name] = fan
+    #console.log("monte carlo", new Date() - @_start)
 
-      for pai in @player().tehais
-        pid = pai.id()
-        stats = {
-          prob: totalHoraVector[pid] / numTries,
-          avgPt: Math.round(totalPointsVector[pid] / totalHoraVector[pid]),
-          expPt: Math.round(totalPointsVector[pid] / numTries),
-        }
-        for name, fan of totalYakuToFanVector[pid]
-          stats[name] = Math.floor(fan / totalHoraVector[pid] * 1000) / 1000
-        console.log("  ", pai.toString(), stats)
+    maxHoraProb = -1 / 0
+    maxHoraProbPid = null
+    maxExpectedPoints = -1 / 0
+    maxExpectedPointsPid = null
+    for pai in candDahais
+      pid = pai.id()
+      horaProb = totalHoraVector[pid] / numTries
+      expectedPoints = totalPointsVector[pid] / numTries
+      if horaProb > maxHoraProb
+        maxHoraProb = horaProb
+        maxHoraProbPid = pid
+      if expectedPoints > maxExpectedPoints
+        maxExpectedPoints = expectedPoints
+        maxExpectedPointsPid = pid
+      stats = {
+        prob: totalHoraVector[pid] / numTries,
+        avgPt: Math.round(totalPointsVector[pid] / totalHoraVector[pid]),
+        expPt: Math.round(totalPointsVector[pid] / numTries),
+      }
+      for name, fan of totalYakuToFanVector[pid]
+        stats[name] = Math.floor(fan / totalHoraVector[pid] * 1000) / 1000
+      console.log("  ", pai.toString(), stats)
 
-      if maxHoraProbPid != maxExpectedPointsPid
-        gain =
-          (((totalPointsVector[maxExpectedPointsPid] / numTries) / (totalPointsVector[maxHoraProbPid] / numTries)) - 1) *
-              (totalHoraVector[maxHoraProbPid] / numTries)
-        if gain >= 0.01
-          for name, fan of totalYakuToFanVector[maxExpectedPointsPid]
-            testAvgFan = fan / totalHoraVector[maxExpectedPointsPid]
-            baseAvgFan = (totalYakuToFanVector[maxHoraProbPid][name] || 0) / totalHoraVector[maxHoraProbPid]
-            if testAvgFan >= baseAvgFan + 0.1
-              testPaiStr = new Pai(maxExpectedPointsPid).toString()
-              basePaiStr = new Pai(maxHoraProbPid).toString()
-              console.log("  choice based on #{name}: #{testPaiStr} (#{testAvgFan}) vs #{basePaiStr} (#{baseAvgFan})")
+    if maxHoraProbPid != maxExpectedPointsPid
+      gain =
+        (((totalPointsVector[maxExpectedPointsPid] / numTries) / (totalPointsVector[maxHoraProbPid] / numTries)) - 1) *
+            (totalHoraVector[maxHoraProbPid] / numTries)
+      if gain >= 0.01
+        for name, fan of totalYakuToFanVector[maxExpectedPointsPid]
+          testAvgFan = fan / totalHoraVector[maxExpectedPointsPid]
+          baseAvgFan = (totalYakuToFanVector[maxHoraProbPid][name] || 0) / totalHoraVector[maxHoraProbPid]
+          if testAvgFan >= baseAvgFan + 0.1
+            testPaiStr = new Pai(maxExpectedPointsPid).toString()
+            basePaiStr = new Pai(maxHoraProbPid).toString()
+            console.log("  choice based on #{name}: #{testPaiStr} (#{testAvgFan}) vs #{basePaiStr} (#{baseAvgFan})")
 
-      # Just returning new Pai(maxPid) doesn't work because it may be a red pai.
-      for pai in @player().tehais
-        if pai.id() == maxExpectedPointsPid
-          console.log("  decidedDahai", pai.toString())
-          return pai
-      throw "should not happen"
+    # Just returning new Pai(maxPid) doesn't work because it may be a red pai.
+    for pai in candDahais
+      if pai.id() == maxExpectedPointsPid
+        console.log("  decidedDahai", pai.toString())
+        return pai
+    throw "should not happen"
 
   shuffle: (array, n = array.length) ->
     for i in [0...n]
