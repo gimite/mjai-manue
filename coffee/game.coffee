@@ -30,7 +30,7 @@ class Game
         @_oya = action.oya
         if !@_chicha then @_chicha = @_oya
         @_doraMarkers = [action.doraMarker]
-        @_numPipais = Pai.NUM_IDS * 4 - 13 * 4 - 14
+        @_numPipais = Game.NUM_INITIAL_PIPAIS
       when "tsumo"
         --@_numPipais
       when "dora"
@@ -120,8 +120,12 @@ class Game
       if action.scores
         player.score = action.scores[player.id]
 
+  printState: ->
+    console.log(@_currentAction.toJson())
+    for player in @_players
       console.log("[#{player.id}] tehai: " + Pai.paisToStr(player.tehais))
       console.log("       ho: " + Pai.paisToStr(player.ho))
+    console.log("")
 
   canHora: (player, shantenAnalysis) ->
     action = @_currentAction
@@ -221,6 +225,8 @@ class Game
   setState: (state) ->
     for k, v of state
       this["_#{k}"] = v
+
+Game.NUM_INITIAL_PIPAIS = Pai.NUM_IDS * 4 - 13 * 4 - 14
 
 Util.attrReader(Game, ["players", "doraMarkers", "bakaze", "numPipais"])
 

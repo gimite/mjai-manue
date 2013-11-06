@@ -1,15 +1,18 @@
+fs = require("fs")
 AI = require("./ai")
 Pai = require("./pai")
 PaiSet = require("./pai_set")
 ShantenAnalysis = require("./shanten_analysis")
 BitVector = require("./bit_vector")
 DangerEstimator = require("./danger_estimator")
+Game = require("./game")
 Util = require("./util")
 
 class ManueAI extends AI
 
   constructor: ->
     @_dangerEstimator = new DangerEstimator()
+    @_stats = JSON.parse(fs.readFileSync("../share/game_stats.json").toString("utf-8"))
 
   respondToAction: (action) ->
 
@@ -129,8 +132,7 @@ class ManueAI extends AI
     #console.log("  visiblePaiSet", visiblePaiSet.toString())
     #console.log("invisiblePids", Pai.paisToStr(new Pai(pid) for pid in invisiblePids))
 
-    # TODO Estimate this more accurately.
-    numTsumos = Math.floor(@game().numPipais() / 4)
+    numTsumos = @getNumExpectedRemainingTurns()
     console.log("  numTsumos", numTsumos)
     numTries = 1000
     totalHoraVector = (0 for _ in [0...Pai.NUM_IDS])
@@ -344,6 +346,15 @@ class ManueAI extends AI
     if fan > 0
       goal.yakus.push([name, fan])
       goal.fan += fan
+
+  getNumExpectedRemainingTurns: ->
+    currentTurn = Math.round((Game.NUM_INITIAL_PIPAIS - @game().numPipais()) / 4)
+    num = den = 0
+    for i in [currentTurn...@_stats.numTurnsDistribution.length]
+      prob = @_stats.numTurnsDistribution[i]
+      num += prob * (i - currentTurn + 0.5)
+      den += prob
+    return (if den == 0 then 0 else Math.round(num / den))
 
 ManueAI.getAllPids = ->
   allPids = []
