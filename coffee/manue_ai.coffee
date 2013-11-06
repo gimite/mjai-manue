@@ -56,53 +56,67 @@ class ManueAI extends AI
     return null
 
   decideDahai: (analysis) ->
-    candDahais = @getSafestDahais(analysis)
-    return @getDahaiToMaximizeHoraProb(analysis, candDahais)
 
-  getSafestDahais: (analysis) ->
-
-    possibleDahais = []
+    candDahais = []
     for pai in @player().tehais
-      if Util.all possibleDahais, ((p) -> !p.equal(pai))
-        possibleDahais.push(pai)
+      if Util.all candDahais, ((p) -> !p.equal(pai))
+        candDahais.push(pai)
 
+    safeProbs = @getSafeProbs(candDahais, analysis)
+    metrics = @getHoraEstimation(candDahais, analysis)
+
+    maxExpectedPoints = -1 / 0
+    maxExpectedPointsPai = null
+    displayMetrics = {}
+    for pai in candDahais
+      pid = pai.id()
+      metric = metrics[pid]
+      metric.safeProb = safeProbs[pid]
+      metric.safeExpectedPoints = metric.safeProb * metric.expectedHoraPoints
+      metric.unsafeExpectedPoints = -(1 - metric.safeProb) * @_stats.averageHoraPoints
+      metric.expectedPoints = metric.safeExpectedPoints + metric.unsafeExpectedPoints
+      displayMetrics[pai.toString()] = {
+        unsafeProb: Math.round((1 - metric.safeProb) * 1000) / 1000,
+        horaProb: metric.horaProb,
+        avgHoraPt: Math.round(metric.averageHoraPoints),
+        safeExpPt: Math.round(metric.safeExpectedPoints),
+        unsafeExpPt: Math.round(metric.unsafeExpectedPoints),
+        expPt: Math.round(metric.expectedPoints),
+      }
+      if metric.expectedPoints > maxExpectedPoints
+        maxExpectedPoints = metric.expectedPoints
+        maxExpectedPointsPai = pai
+    console.log("metrics:")
+    console.log(displayMetrics)
+    console.log("decidedDahai", maxExpectedPointsPai.toString())
+    return maxExpectedPointsPai
+
+  getSafeProbs: (candDahais, analysis) ->
     safeProbs = {}
-    for pai in possibleDahais
-      safeProbs[pai.toString()] = 1
-    hasReacher = false
-    for player in @game().players()
-      if player != @player() && player.reachState == "accepted"
-        hasReacher = true
-        scene = @_dangerEstimator.getScene(@game(), @player(), player)
-        probInfos = {}
-        for pai in possibleDahais
-          if scene.anpai(pai)
-            probInfo = {anpai: true}
-            safeProb = 1
-          else
-            probInfo = @_dangerEstimator.estimateProb(scene, pai)
-            features2 = []
-            for feature in probInfo.features
-              features2.push("#{feature.name} #{feature.value}")
-            probInfo.features = features2
-            safeProb = 1 - probInfo.prob
-          safeProbs[pai.toString()] *= safeProb
-          probInfos[pai.toString()] = probInfo
-        console.log("danger", probInfos)
+    for pai in candDahais
+      safeProbs[pai.id()] = 1
+    if analysis.shanten() > 0  # TODO Better handling of tenpai
+      for player in @game().players()
+        if player != @player() && player.reachState == "accepted"
+          scene = @_dangerEstimator.getScene(@game(), @player(), player)
+          probInfos = {}
+          for pai in candDahais
+            if scene.anpai(pai)
+              probInfo = {anpai: true}
+              safeProb = 1
+            else
+              probInfo = @_dangerEstimator.estimateProb(scene, pai)
+              features2 = []
+              for feature in probInfo.features
+                features2.push("#{feature.name} #{feature.value}")
+              probInfo.features = features2
+              safeProb = 1 - probInfo.prob
+            safeProbs[pai.id()] *= safeProb
+            probInfos[pai.toString()] = probInfo
+          console.log("danger", probInfos)
+    return safeProbs
 
-    if hasReacher && analysis.shanten() > 0
-      maxSafeProb = -1 / 0
-      maxPai = null
-      for pai in possibleDahais
-        safeProb = safeProbs[pai.toString()]
-        console.log("safeProb", pai.toString(), safeProb)
-        if safeProb > maxSafeProb
-          maxSafeProb = safeProb
-      return (pai for pai in possibleDahais when safeProbs[pai.toString()] == maxSafeProb)
-    else
-      return possibleDahais
-
-  getDahaiToMaximizeHoraProb: (analysis, candDahais) ->
+  getHoraEstimation: (candDahais, analysis) ->
 
     console.log("  shanten", analysis.shanten())
     currentVector = new PaiSet(@player().tehais).array()
@@ -174,48 +188,38 @@ class ManueAI extends AI
               totalYakuToFanVector[pid][name] = fan
     #console.log("monte carlo", new Date() - @_start)
 
-    maxHoraProb = -1 / 0
-    maxHoraProbPid = null
-    maxExpectedPoints = -1 / 0
-    maxExpectedPointsPid = null
+    metrics = {}
     for pai in candDahais
       pid = pai.id()
-      horaProb = totalHoraVector[pid] / numTries
-      expectedPoints = totalPointsVector[pid] / numTries
-      if horaProb > maxHoraProb
-        maxHoraProb = horaProb
-        maxHoraProbPid = pid
-      if expectedPoints > maxExpectedPoints
-        maxExpectedPoints = expectedPoints
-        maxExpectedPointsPid = pid
-      stats = {
-        prob: totalHoraVector[pid] / numTries,
-        avgPt: Math.round(totalPointsVector[pid] / totalHoraVector[pid]),
-        expPt: Math.round(totalPointsVector[pid] / numTries),
+      metrics[pid] = {
+        horaProb: totalHoraVector[pid] / numTries,
+        averageHoraPoints: totalPointsVector[pid] / totalHoraVector[pid],
+        expectedHoraPoints: totalPointsVector[pid] / numTries,
       }
-      for name, fan of totalYakuToFanVector[pid]
-        stats[name] = Math.floor(fan / totalHoraVector[pid] * 1000) / 1000
-      console.log("  ", pai.toString(), stats)
+      # for name, fan of totalYakuToFanVector[pid]
+      #   stats[name] = Math.floor(fan / totalHoraVector[pid] * 1000) / 1000
+      # console.log("  ", pai.toString(), stats)
+    return metrics
 
-    if maxHoraProbPid != maxExpectedPointsPid
-      gain =
-        (((totalPointsVector[maxExpectedPointsPid] / numTries) / (totalPointsVector[maxHoraProbPid] / numTries)) - 1) *
-            (totalHoraVector[maxHoraProbPid] / numTries)
-      if gain >= 0.01
-        for name, fan of totalYakuToFanVector[maxExpectedPointsPid]
-          testAvgFan = fan / totalHoraVector[maxExpectedPointsPid]
-          baseAvgFan = (totalYakuToFanVector[maxHoraProbPid][name] || 0) / totalHoraVector[maxHoraProbPid]
-          if testAvgFan >= baseAvgFan + 0.1
-            testPaiStr = new Pai(maxExpectedPointsPid).toString()
-            basePaiStr = new Pai(maxHoraProbPid).toString()
-            console.log("  choice based on #{name}: #{testPaiStr} (#{testAvgFan}) vs #{basePaiStr} (#{baseAvgFan})")
+    # if maxHoraProbPid != maxExpectedPointsPid
+    #   gain =
+    #     (((totalPointsVector[maxExpectedPointsPid] / numTries) / (totalPointsVector[maxHoraProbPid] / numTries)) - 1) *
+    #         (totalHoraVector[maxHoraProbPid] / numTries)
+    #   if gain >= 0.01
+    #     for name, fan of totalYakuToFanVector[maxExpectedPointsPid]
+    #       testAvgFan = fan / totalHoraVector[maxExpectedPointsPid]
+    #       baseAvgFan = (totalYakuToFanVector[maxHoraProbPid][name] || 0) / totalHoraVector[maxHoraProbPid]
+    #       if testAvgFan >= baseAvgFan + 0.1
+    #         testPaiStr = new Pai(maxExpectedPointsPid).toString()
+    #         basePaiStr = new Pai(maxHoraProbPid).toString()
+    #         console.log("  choice based on #{name}: #{testPaiStr} (#{testAvgFan}) vs #{basePaiStr} (#{baseAvgFan})")
 
-    # Just returning new Pai(maxPid) doesn't work because it may be a red pai.
-    for pai in candDahais
-      if pai.id() == maxExpectedPointsPid
-        console.log("  decidedDahai", pai.toString())
-        return pai
-    throw new Error("should not happen")
+    # # Just returning new Pai(maxPid) doesn't work because it may be a red pai.
+    # for pai in candDahais
+    #   if pai.id() == maxExpectedPointsPid
+    #     console.log("  decidedDahai", pai.toString())
+    #     return pai
+    # throw new Error("should not happen")
 
   shuffle: (array, n = array.length) ->
     for i in [0...n]
