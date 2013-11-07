@@ -121,7 +121,6 @@ class Game
         player.score = action.scores[player.id]
 
   printState: ->
-    console.log(@_currentAction.toJson())
     for player in @_players
       console.log("[#{player.id}] tehai: " + Pai.paisToStr(player.tehais))
       console.log("       ho: " + Pai.paisToStr(player.ho))

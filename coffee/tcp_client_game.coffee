@@ -44,6 +44,7 @@ class TCPClientGame extends Game
         return
       else
         @updateState(action)
+        @printState()
         response = @_ai.respondToAction(action)
         if action.type == "end_game"
           @_socket.end()

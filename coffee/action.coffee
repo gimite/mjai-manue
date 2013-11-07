@@ -20,6 +20,9 @@ class Action
     return new Action(params)
 
   toJson: ->
+    return JSON.stringify(@toPlain())
+
+  toPlain: ->
     hash = {}
     for name, type of Action.FIELD_SPECS
       obj = this[Util.camelCase(name)]
@@ -35,10 +38,12 @@ class Action
           plain = (c.toString() for c in obj)
         when "pais_list"
           plain = ((g.toString() for g in c) for c in obj)
+        when "actions"
+          plain = (c.toPlain() for c in obj)
         else
           throw new Error("unknown type")
       hash[name] = plain
-    return JSON.stringify(hash)
+    return hash
 
 Action.FIELD_SPECS = {
     type: "string",
@@ -49,6 +54,8 @@ Action.FIELD_SPECS = {
     consumed: "pais",
     pais: "pais",
     tsumogiri: "boolean",
+    possible_actions: "actions",
+    cannot_dahai: "pais",
     id: "number",
     bakaze: "pai",
     kyoku: "number",
@@ -73,7 +80,9 @@ Action.FIELD_SPECS = {
 }
 
 Action.fromJson = (json, game) ->
-  hash = JSON.parse(json)
+  return Action.fromPlain(JSON.parse(json), game)
+
+Action.fromPlain = (hash, game) ->
   params = {}
   for name, plain of hash
     type = Action.FIELD_SPECS[name]
@@ -89,10 +98,14 @@ Action.plainToObj = (plain, type, game) ->
       return game.players()[plain]
     when "pai"
       return new Pai(plain)
+    when "action"
+      return Action.fromPlain(plain, game)
     when "pais"
       return Action.plainsToObjs(plain, "pai", game)
     when "pais_list"
       return Action.plainsToObjs(plain, "pais", game)
+    when "actions"
+      return Action.plainsToObjs(plain, "action", game)
     else
       throw new Error("unknown type: #{type}")
 
