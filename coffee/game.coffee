@@ -114,7 +114,7 @@ class Game
         switch action.type
           when "chi", "pon", "daiminkan"
             pai = player.ho.pop()
-            if pai != action.pai
+            if !pai.equal(action.pai)
               throw new Error("should not happen")
 
       if action.scores
@@ -227,6 +227,6 @@ class Game
 
 Game.NUM_INITIAL_PIPAIS = Pai.NUM_IDS * 4 - 13 * 4 - 14
 
-Util.attrReader(Game, ["players", "doraMarkers", "bakaze", "numPipais"])
+Util.attrReader(Game, ["players", "doraMarkers", "bakaze", "oya", "numPipais"])
 
 module.exports = Game
