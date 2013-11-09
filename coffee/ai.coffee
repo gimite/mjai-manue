@@ -4,12 +4,18 @@ Action = require("./action")
 class AI
 
   initialize: (@_game, @_player) ->
+    @_log = ""
 
-  createAction: (extraParams) ->
-    params = {actor: @_player}
-    for k, v of extraParams
-      params[k] = v
-    return new Action(params)
+  createAction: (action) ->
+    if action.constructor != Action
+      action = new Action(action)
+    action = action.merge({actor: @_player, log: @_log})
+    @_log = ""
+    return action
+
+  log: (str) ->
+    console.log(str)
+    @_log += str
 
 Util.attrReader(AI, ["game", "player"])
 

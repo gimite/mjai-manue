@@ -227,6 +227,31 @@ class Game
 
 Game.NUM_INITIAL_PIPAIS = Pai.NUM_IDS * 4 - 13 * 4 - 14
 
+Game.getDefaultStateForTest = ->
+  players = []
+  for i in [0...4]
+    players.push({
+      id: i,
+      tehais: (Pai.UNKNOWN for _ in [0...13])
+      furos: [],
+      ho: [],
+      sutehais: [],
+      extraAnpais: [],
+      reachState: "none",
+      reachHoIndex: null,
+      reachSutehaiIndex: null,
+    })
+  return {
+    players: players,
+    bakaze: new Pai("E"),
+    kyokuNum: 1,
+    honba: 0,
+    oya: players[0],
+    chicha: players[0],
+    doraMarkers: [],
+    numPipais: Game.NUM_INITIAL_PIPAIS,
+  }
+
 Util.attrReader(Game, ["players", "doraMarkers", "bakaze", "oya", "numPipais"])
 
 module.exports = Game

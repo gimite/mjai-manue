@@ -13,7 +13,7 @@ class Action
     params = {}
     for name, type of Action.FIELD_SPECS
       camelName = Util.camelCase(name)
-      if camelName in this
+      if camelName of this
         params[camelName] = this[camelName]
     for k, v of extraParams
       params[k] = v
@@ -77,6 +77,7 @@ Action.FIELD_SPECS = {
     scores: "numbers",
     text: "string",
     message: "string",
+    log: "string",
 }
 
 Action.fromJson = (json, game) ->

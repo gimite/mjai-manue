@@ -25,9 +25,9 @@ class ManueAI extends AI
         when "tsumo", "chi", "pon", "reach"
           actions = @categorizeActions(action.possibleActions)
           if actions.hora
-            return actions.hora
+            return @createAction(actions.hora)
           else if actions.reach
-            return actions.reach
+            return @createAction(actions.reach)
           else if @player().reachState == "accepted"
             return @createAction(type: "dahai", pai: action.pai, tsumogiri: true)
           else
@@ -43,11 +43,11 @@ class ManueAI extends AI
         when "dahai", "kakan"
           actions = @categorizeActions(action.possibleActions)
           if actions.hora
-            return actions.hora
+            return @createAction(actions.hora)
           else if actions.furos.length > 0
             return @decideFuro(actions.furos)
 
-    return null
+    return @createAction(type: "none")
 
   decideDahai: (forbiddenDahais) ->
 
@@ -72,7 +72,7 @@ class ManueAI extends AI
     metrics = {}
 
     noneMetrics = @getMetrics(@player().tehais, @player().furos, [null])
-    metrics[null] = noneMetrics[null]
+    metrics["none"] = noneMetrics["none"]
 
     for j in [0...furoActions.length]
       action = furoActions[j]
@@ -96,11 +96,11 @@ class ManueAI extends AI
     key = @chooseBestMetric(metrics)
     console.log("decidedKey", key)
 
-    if key == null
-      return null
+    if key == "none"
+      return @createAction(type: "none")
     else
       [actionIdx, paiStr] = key.split(/\./)
-      return furoActions[parseInt(actionIdx)]
+      return @createAction(furoActions[parseInt(actionIdx)])
 
   getMetrics: (tehais, furos, candDahais) ->
 
@@ -111,7 +111,7 @@ class ManueAI extends AI
     metrics = @getHoraEstimation(candDahais, analysis, furos)
 
     for pai in candDahais
-      key = (if pai then pai.toString() else null)
+      key = (if pai then pai.toString() else "none")
       metric = metrics[key]
       metric.safeProb = safeProbs[key]
       metric.safeExpectedPoints = metric.safeProb * metric.expectedHoraPoints
@@ -129,23 +129,29 @@ class ManueAI extends AI
     return bestKey
 
   printMetrics: (metrics) ->
-    displayMetrics = {}
-    for key, metric of metrics
-      displayMetrics[key] = {
-        unsafeProb: Math.round((1 - metric.safeProb) * 1000) / 1000,
-        horaProb: metric.horaProb,
-        avgHoraPt: Math.round(metric.averageHoraPoints),
-        safeExpPt: Math.round(metric.safeExpectedPoints),
-        unsafeExpPt: Math.round(metric.unsafeExpectedPoints),
-        expPt: Math.round(metric.expectedPoints),
-      }
     console.log("metrics:")
-    console.log(displayMetrics)
+    bestKey = @chooseBestMetric(metrics)
+    if !bestKey then return
+    @printMetric(bestKey, metrics[bestKey])
+    @log("\n")
+    for key, metric of metrics
+      @printMetric(key, metric)
+
+  printMetric: (key, metric) ->
+    params = {
+      expPt: Math.round(metric.expectedPoints),
+      unsafeProb: Math.round((1 - metric.safeProb) * 1000) / 1000,
+      horaProb: metric.horaProb,
+      avgHoraPt: Math.round(metric.averageHoraPoints),
+      safeExpPt: Math.round(metric.safeExpectedPoints),
+      unsafeExpPt: Math.round(metric.unsafeExpectedPoints),
+    }
+    @log(key + ": " + ("#{k}=#{v}" for k, v of params).join(" ") + "\n")
 
   getSafeProbs: (candDahais, analysis) ->
     safeProbs = {}
     for pai in candDahais
-      key = (if pai then pai.toString() else null)
+      key = (if pai then pai.toString() else "none")
       safeProbs[key] = 1
     if analysis.shanten() > 0  # TODO Better handling of tenpai
       for player in @game().players()
@@ -167,7 +173,7 @@ class ManueAI extends AI
               safeProbs[pai.toString()] *= safeProb
               probInfos[pai.toString()] = probInfo
             else
-              safeProbs[null] = 1
+              safeProbs["none"] = 1
           console.log("danger")
           console.log(probInfos)
     return safeProbs
@@ -185,8 +191,9 @@ class ManueAI extends AI
         goal.requiredBitVectors = @countVectorToBitVectors(goal.requiredVector)
         goal.furos = furos
         @calculateFan(goal)
-        goals.push(goal)
-    console.log("  goals", goals.length)
+        if goal.points > 0
+          goals.push(goal)
+    console.log("goals", goals.length)
     #console.log("requiredBitVectors", new Date() - @_start)
 
     # for goal in goals
@@ -248,7 +255,7 @@ class ManueAI extends AI
     metrics = {}
     for pai in candDahais
       pid = (if pai then pai.id() else Pai.NUM_IDS)
-      key = (if pai then pai.toString() else null)
+      key = (if pai then pai.toString() else "none")
       metrics[key] = {
         horaProb: totalHoraVector[pid] / numTries,
         averageHoraPoints: totalPointsVector[pid] / totalHoraVector[pid],
@@ -425,8 +432,10 @@ class ManueAI extends AI
       basePoints = 3000
     else if fan >= 5 || (fan >= 4 && fu >= 40) || (fan >= 3 && fu >= 70)
       basePoints = 2000
-    else
+    else if fan >= 1
       basePoints = fu * Math.pow(2, fan + 2)
+    else
+      basePoints = 0
 
     return Math.ceil(basePoints * (if oya then 6 else 4) / 100) * 100
 

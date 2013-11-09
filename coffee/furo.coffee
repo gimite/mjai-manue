@@ -1,4 +1,5 @@
 Util = require("./util")
+Pai = require("./pai")
 
 class Furo
 
@@ -9,7 +10,9 @@ class Furo
     @_target = params.target
 
   pais: ->
-    return (if @_taken then [@_taken] else []).concat(@_consumed)
+    result = (if @_taken then [@_taken] else []).concat(@_consumed)
+    result.sort(Pai.compare)
+    return result
 
 Util.attrReader(Furo, ["type", "taken", "consumed", "target"])
 
