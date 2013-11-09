@@ -26,7 +26,8 @@ class ManueAI extends AI
           actions = @categorizeActions(action.possibleActions)
           if actions.hora
             return @createAction(actions.hora)
-          else if actions.reach
+          else if actions.reach && new ShantenAnalysis(pai.id() for pai in @player().tehais).shanten() <= 0
+            # Checks tenpai because possibleActions can include reach on chitoitsu/kokushimuso tenpai.
             return @createAction(actions.reach)
           else if @player().reachState == "accepted"
             return @createAction(type: "dahai", pai: action.pai, tsumogiri: true)
@@ -63,7 +64,7 @@ class ManueAI extends AI
 
     metrics = @getMetrics(@player().tehais, @player().furos, candDahais)
     @printMetrics(metrics)
-    paiStr = @chooseBestMetric(metrics)
+    paiStr = @chooseBestMetric(metrics, true)
     console.log("decidedDahai", paiStr)
     return new Pai(paiStr)
 
@@ -93,7 +94,7 @@ class ManueAI extends AI
         metrics["#{j}.#{paiStr}"] = metric
 
     @printMetrics(metrics)
-    key = @chooseBestMetric(metrics)
+    key = @chooseBestMetric(metrics, false)
     console.log("decidedKey", key)
 
     if key == "none"
@@ -108,7 +109,7 @@ class ManueAI extends AI
         pai.id() for pai in tehais,
         {allowedExtraPais: 1})
     safeProbs = @getSafeProbs(candDahais, analysis)
-    metrics = @getHoraEstimation(candDahais, analysis, furos)
+    metrics = @getHoraEstimation(candDahais, analysis, tehais, furos)
 
     for pai in candDahais
       key = (if pai then pai.toString() else "none")
@@ -119,14 +120,20 @@ class ManueAI extends AI
       metric.expectedPoints = metric.safeExpectedPoints + metric.unsafeExpectedPoints
     return metrics
 
-  chooseBestMetric: (metrics) ->
+  chooseBestMetric: (metrics, preferBlack) ->
     maxExpectedPoints = -1 / 0
     bestKey = null
     for key, metric of metrics
-      if metric.expectedPoints > maxExpectedPoints
+      if metric.expectedPoints > maxExpectedPoints ||
+          (metric.expectedPoints == maxExpectedPoints && preferBlack && @isBlackVersionOf(key, bestKey))
         maxExpectedPoints = metric.expectedPoints
         bestKey = key
     return bestKey
+
+  isBlackVersionOf: (paiStr1, paiStr2) ->
+    pai1 = new Pai(paiStr1)
+    pai2 = new Pai(paiStr2)
+    return pai1.hasSameSymbol(pai2) && !pai1.red() && pai2.red()
 
   printMetrics: (metrics) ->
     console.log("metrics:")
@@ -178,10 +185,10 @@ class ManueAI extends AI
           console.log(probInfos)
     return safeProbs
 
-  getHoraEstimation: (candDahais, analysis, furos) ->
+  getHoraEstimation: (candDahais, analysis, tehais, furos) ->
 
     console.log("  shanten", analysis.shanten())
-    currentVector = new PaiSet(@player().tehais).array()
+    currentVector = new PaiSet(tehais).array()
     goals = []
     for goal in analysis.goals()
       # If it's tenpai, tenpai must be kept because it has reached.
@@ -190,7 +197,7 @@ class ManueAI extends AI
           goal.shanten == analysis.shanten()
         goal.requiredBitVectors = @countVectorToBitVectors(goal.requiredVector)
         goal.furos = furos
-        @calculateFan(goal)
+        @calculateFan(goal, tehais)
         if goal.points > 0
           goals.push(goal)
     console.log("goals", goals.length)
@@ -303,7 +310,7 @@ class ManueAI extends AI
       bitVectors.push(new BitVector(c >= i for c in countVector))
     return bitVectors
 
-  calculateFan: (goal) ->
+  calculateFan: (goal, tehais) ->
 
     mentsus = []
     for mentsu in goal.mentsus
@@ -317,6 +324,11 @@ class ManueAI extends AI
     for mentsu in mentsus
       for pai in mentsu.pais
         allPais.push(pai)
+    furoPais = []
+    for furo in goal.furos
+      for pai in furo.pais()
+        furoPais.push(pai)
+
     goal.yakus = []
     goal.fan = 0
 
@@ -403,10 +415,9 @@ class ManueAI extends AI
           if pai.hasSameSymbol(dora)
             ++numDoras
       @addYaku(goal, "dr", numDoras)
-      # TODO Discard 5m when it has both 5m and 5mr
       numAkadoras = 0
-      for pai in @player().tehais
-        if pai.red() && pai.removeRed().isIn(allPais)
+      for pai in tehais.concat(furoPais)
+        if pai.red() && (Util.any allPais, ((p) -> p.hasSameSymbol(pai)))
           ++numAkadoras
       @addYaku(goal, "adr", numAkadoras)
 

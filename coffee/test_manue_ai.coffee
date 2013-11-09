@@ -30,7 +30,7 @@ goal = {
   ],
   furos: [],
 }
-ai.calculateFan(goal)
+ai.calculateFan(goal, [])
 assert.ok(hasYaku(goal, "tyc", 1))
 assert.equal(goal.fu, 40)
 assert.equal(goal.fan, 2)
@@ -48,5 +48,19 @@ goal = {
     new Furo(type: "pon", taken: new Pai("4p"), consumed: Pai.strToPais("4p 4p"), target: state.players[0]),
   ],
 }
-ai.calculateFan(goal)
+ai.calculateFan(goal, [])
 assert.equal(goal.points, 0)
+
+goal = {
+  mentsus: [
+    {type: "shuntsu", pids: strToPids("2m 3m 4m")},
+    {type: "kotsu", pids: strToPids("2p 2p 2p")},
+    {type: "kotsu", pids: strToPids("4p 4p 4p")},
+    {type: "toitsu", pids: strToPids("6p 6p")},
+  ],
+  furos: [
+    new Furo(type: "chi", taken: new Pai("5mr"), consumed: Pai.strToPais("6m 7m"), target: state.players[0]),
+  ],
+}
+ai.calculateFan(goal, [])
+assert.ok(hasYaku(goal, "adr", 1))
