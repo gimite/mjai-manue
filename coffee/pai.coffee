@@ -55,7 +55,7 @@ class Pai
     return other && other.constructor == Pai && @_id == other.id() && @_red == other.red()
 
   hasSameSymbol: (other) ->
-    return @_id == other.id()
+    return other && @_id == other.id()
 
   isIn: (pais) ->
     for pai in pais

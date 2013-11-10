@@ -1,4 +1,5 @@
 fs = require("fs")
+printf = require("printf")
 AI = require("./ai")
 Pai = require("./pai")
 PaiSet = require("./pai_set")
@@ -87,7 +88,7 @@ class ManueAI extends AI
           new Furo(type: action.type, taken: action.pai, consumed: action.consumed, target: action.target)])
       candDahais = []
       for pai in tehais
-        if Util.all candDahais, ((p) -> !p.equal(pai))
+        if (Util.all candDahais, ((p) -> !p.equal(pai))) && !@isKuikae(action, pai)
           candDahais.push(pai)
       furoMetrics = @getMetrics(tehais, furos, candDahais)
       for paiStr, metric of furoMetrics
@@ -102,6 +103,17 @@ class ManueAI extends AI
     else
       [actionIdx, paiStr] = key.split(/\./)
       return @createAction(furoActions[parseInt(actionIdx)])
+
+  isKuikae: (furoAction, dahai) ->
+    pais = furoAction.consumed.concat([dahai])
+    pais.sort(Pai.compare)
+    if pais[1].hasSameSymbol(pais[0]) && pais[2].hasSameSymbol(pais[0])
+      return true
+    else if pais[1].hasSameSymbol(pais[0].next(1)) &&
+        pais[2].hasSameSymbol(pais[0].next(2))
+      return true
+    else
+      return false
 
   getMetrics: (tehais, furos, candDahais) ->
 
@@ -136,24 +148,21 @@ class ManueAI extends AI
     return pai1.hasSameSymbol(pai2) && !pai1.red() && pai2.red()
 
   printMetrics: (metrics) ->
-    console.log("metrics:")
-    bestKey = @chooseBestMetric(metrics)
-    if !bestKey then return
-    @printMetric(bestKey, metrics[bestKey])
-    @log("\n")
-    for key, metric of metrics
-      @printMetric(key, metric)
-
-  printMetric: (key, metric) ->
-    params = {
-      expPt: Math.round(metric.expectedPoints),
-      unsafeProb: Math.round((1 - metric.safeProb) * 1000) / 1000,
-      horaProb: metric.horaProb,
-      avgHoraPt: Math.round(metric.averageHoraPoints),
-      safeExpPt: Math.round(metric.safeExpectedPoints),
-      unsafeExpPt: Math.round(metric.unsafeExpectedPoints),
-    }
-    @log(key + ": " + ("#{k}=#{v}" for k, v of params).join(" ") + "\n")
+    sortedMetrics = ([k, m] for k, m of metrics)
+    sortedMetrics.sort(([k1, m1], [k2, m2]) -> m2.expectedPoints - m1.expectedPoints)
+    if sortedMetrics.length == 0
+      return
+    @log("| action | expPt | unsafeProb | horaProb | avgHoraPt | safeExpPt | unsafeExpPt |")
+    for [key, metric] in sortedMetrics
+      @log(printf(
+          "| %-6s | %5d |      %.3f |    %.3f | %9d | %9d | %11d |",
+          key, 
+          metric.expectedPoints, 
+          1 - metric.safeProb, 
+          metric.horaProb, 
+          metric.averageHoraPoints, 
+          metric.safeExpectedPoints, 
+          metric.unsafeExpectedPoints))
 
   getSafeProbs: (candDahais, analysis) ->
     safeProbs = {}
@@ -187,7 +196,7 @@ class ManueAI extends AI
 
   getHoraEstimation: (candDahais, analysis, tehais, furos) ->
 
-    console.log("  shanten", analysis.shanten())
+    @log("shanten=" + analysis.shanten())
     currentVector = new PaiSet(tehais).array()
     goals = []
     for goal in analysis.goals()
@@ -218,7 +227,7 @@ class ManueAI extends AI
     #console.log("invisiblePids", Pai.paisToStr(new Pai(pid) for pid in invisiblePids))
 
     numTsumos = @getNumExpectedRemainingTurns()
-    console.log("  numTsumos", numTsumos)
+    console.log("numTsumos", numTsumos)
     numTries = 1000
     totalHoraVector = (0 for _ in [0...(Pai.NUM_IDS + 1)])
     totalPointsVector = (0 for _ in [0...(Pai.NUM_IDS + 1)])

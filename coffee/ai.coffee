@@ -15,7 +15,7 @@ class AI
 
   log: (str) ->
     console.log(str)
-    @_log += str
+    @_log += str + "\n"
 
 Util.attrReader(AI, ["game", "player"])
 
