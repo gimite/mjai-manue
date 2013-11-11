@@ -37,7 +37,9 @@ class ManueAI extends AI
             return @createAction(
                 type: "dahai",
                 pai: dahai,
-                tsumogiri: action.type == "tsumo" && dahai.equal(action.pai))
+                tsumogiri:
+                    action.type in ["tsumo", "reach"] &&
+                        dahai.equal(@player().tehais[@player().tehais.length - 1]))
     
     else
 

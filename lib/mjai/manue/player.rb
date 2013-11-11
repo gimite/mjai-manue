@@ -70,14 +70,14 @@ module Mjai
                     raise("unknown score_type")
                 end
                 if eval.prob_info.progress_prob > 0.0
-                  log("%s: ept=%d ppr=%.3f hpr=%.3f apt=%d (%s)\n" % [
-                      pai,
-                      eval.expected_points,
-                      eval.prob_info.progress_prob,
-                      eval.prob_info.hora_prob,
-                      eval.points_estimate.average_points,
-                      eval.points_estimate.yaku_debug_str,
-                  ])
+                  # log("%s: ept=%d ppr=%.3f hpr=%.3f apt=%d (%s)\n" % [
+                  #     pai,
+                  #     eval.expected_points,
+                  #     eval.prob_info.progress_prob,
+                  #     eval.prob_info.hora_prob,
+                  #     eval.points_estimate.average_points,
+                  #     eval.points_estimate.yaku_debug_str,
+                  # ])
                 end
                 @evals[pai] = eval
               end
@@ -169,7 +169,7 @@ module Mjai
                   end
                   if has_reacher
                     for pai, safe_prob in safe_probs
-                      log("%s: safe_prob=%.3f\n" % [pai, safe_prob])
+                      #log("%s: safe_prob=%.3f\n" % [pai, safe_prob])
                     end
                   end
                   max_safe_prob = safe_probs.values.max

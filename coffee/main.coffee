@@ -4,7 +4,7 @@ ManueAI = require("./manue_ai")
 
 game = new TCPClientGame({
     url: "mjsonp://localhost:19001/default",
-    name: "Manue",
+    name: "Manue2",
     ai: new ManueAI(),
 })
 game.play()

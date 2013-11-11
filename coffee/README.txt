@@ -1,2 +1,2 @@
-$ sudo npm install coffee-script printf
+$ sudo npm install -g coffee-script
 $ coffee main.coffee

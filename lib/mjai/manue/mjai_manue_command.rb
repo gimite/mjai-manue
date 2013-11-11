@@ -19,7 +19,7 @@ module Mjai
           game = TCPClientGame.new({
               :player => Mjai::Manue::Player.new({:score_type => opts["t"].intern()}),
               :url => url,
-              :name => opts["name"] || "manue",
+              :name => opts["name"] || "Manue1",
           })
           game.play()
         end
