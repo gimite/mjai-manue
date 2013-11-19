@@ -33,7 +33,7 @@ class ManueAI extends AI
           else if @player().reachState == "accepted"
             return @createAction(type: "dahai", pai: action.pai, tsumogiri: true)
           else
-            dahai = @decideDahai(action.cannotDahai || [])
+            dahai = @decideDahai(action.cannotDahai || [], action.type == "reach")
             return @createAction(
                 type: "dahai",
                 pai: dahai,
@@ -53,11 +53,7 @@ class ManueAI extends AI
 
     return @createAction(type: "none")
 
-  decideDahai: (forbiddenDahais) ->
-
-    analysis = new ShantenAnalysis(
-        pai.id() for pai in @player().tehais,
-        {allowedExtraPais: 1})
+  decideDahai: (forbiddenDahais, forReach) ->
 
     candDahais = []
     for pai in @player().tehais
@@ -65,7 +61,7 @@ class ManueAI extends AI
           (Util.all forbiddenDahais, ((p) -> !p.equal(pai)))
         candDahais.push(pai)
 
-    metrics = @getMetrics(@player().tehais, @player().furos, candDahais)
+    metrics = @getMetrics(@player().tehais, @player().furos, candDahais, forReach)
     @printMetrics(metrics)
     paiStr = @chooseBestMetric(metrics, true)
     console.log("decidedDahai", paiStr)
@@ -75,7 +71,7 @@ class ManueAI extends AI
 
     metrics = {}
 
-    noneMetrics = @getMetrics(@player().tehais, @player().furos, [null])
+    noneMetrics = @getMetrics(@player().tehais, @player().furos, [null], false)
     metrics["none"] = noneMetrics["none"]
 
     for j in [0...furoActions.length]
@@ -92,7 +88,7 @@ class ManueAI extends AI
       for pai in tehais
         if (Util.all candDahais, ((p) -> !p.equal(pai))) && !@isKuikae(action, pai)
           candDahais.push(pai)
-      furoMetrics = @getMetrics(tehais, furos, candDahais)
+      furoMetrics = @getMetrics(tehais, furos, candDahais, false)
       for paiStr, metric of furoMetrics
         metrics["#{j}.#{paiStr}"] = metric
 
@@ -117,11 +113,14 @@ class ManueAI extends AI
     else
       return false
 
-  getMetrics: (tehais, furos, candDahais) ->
+  getMetrics: (tehais, furos, candDahais, forReach) ->
 
     analysis = new ShantenAnalysis(
         pai.id() for pai in tehais,
         {allowedExtraPais: 1})
+    if forReach
+      candDahais = @getPossibleDahaisForReach(candDahais, analysis)
+
     safeProbs = @getSafeProbs(candDahais, analysis)
     metrics = @getHoraEstimation(candDahais, analysis, tehais, furos)
 
@@ -195,6 +194,15 @@ class ManueAI extends AI
           console.log("danger")
           console.log(probInfos)
     return safeProbs
+
+  getPossibleDahaisForReach: (candDahais, analysis) ->
+    throwableVector = (0 for _ in [0...Pai.NUM_IDS])
+    for goal in analysis.goals()
+      if goal.shanten == 0
+        for pid in [0...Pai.NUM_IDS]
+          if goal.throwableVector[pid] > 0
+            throwableVector[pid] = 1
+    return (pai for pai in candDahais when throwableVector[pai.id()] > 0)
 
   getHoraEstimation: (candDahais, analysis, tehais, furos) ->
 

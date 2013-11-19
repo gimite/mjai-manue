@@ -3,7 +3,7 @@ TsumogiriAI = require("./tsumogiri_ai")
 ManueAI = require("./manue_ai")
 
 game = new TCPClientGame({
-    url: "mjsonp://localhost:19001/default",
+    url: process.argv[2],
     name: "Manue2",
     ai: new ManueAI(),
 })
