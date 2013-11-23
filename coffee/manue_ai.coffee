@@ -24,36 +24,36 @@ class ManueAI extends AI
 
       switch action.type
         when "tsumo", "chi", "pon", "reach"
-          actions = @categorizeActions(action.possibleActions)
-          if actions.hora
-            return @createAction(actions.hora)
-          else if actions.reach && new ShantenAnalysis(pai.id() for pai in @player().tehais).shanten() <= 0
-            # Checks tenpai because possibleActions can include reach on chitoitsu/kokushimuso tenpai.
-            return @createAction(actions.reach)
-          else if @player().reachState == "accepted"
+          possibleActions = @categorizeActions(action.possibleActions)
+          if possibleActions.hora
+            return @createAction(possibleActions.hora)
+          else if action.type == "tsumo" && @player().reachState == "accepted"
             return @createAction(type: "dahai", pai: action.pai, tsumogiri: true)
           else
-            dahai = @decideDahai(action.cannotDahai || [], action.type == "reach")
-            return @createAction(
-                type: "dahai",
-                pai: dahai,
-                tsumogiri:
-                    action.type in ["tsumo", "reach"] &&
-                        dahai.equal(@player().tehais[@player().tehais.length - 1]))
+            decision = @decideDahai(action.cannotDahai || [], @player().reachState == "declared")
+            if possibleActions.reach && decision.shanten == 0
+              return @createAction(possibleActions.reach)
+            else
+              return @createAction(
+                  type: "dahai",
+                  pai: decision.dahai,
+                  tsumogiri:
+                      action.type in ["tsumo", "reach"] &&
+                          decision.dahai.equal(@player().tehais[@player().tehais.length - 1]))
     
     else
 
       switch action.type
         when "dahai", "kakan"
-          actions = @categorizeActions(action.possibleActions)
-          if actions.hora
-            return @createAction(actions.hora)
-          else if actions.furos.length > 0
-            return @decideFuro(actions.furos)
+          possibleActions = @categorizeActions(action.possibleActions)
+          if possibleActions.hora
+            return @createAction(possibleActions.hora)
+          else if possibleActions.furos.length > 0
+            return @decideFuro(possibleActions.furos)
 
     return @createAction(type: "none")
 
-  decideDahai: (forbiddenDahais, forReach) ->
+  decideDahai: (forbiddenDahais, reachDeclared) ->
 
     candDahais = []
     for pai in @player().tehais
@@ -61,17 +61,26 @@ class ManueAI extends AI
           (Util.all forbiddenDahais, ((p) -> !p.equal(pai)))
         candDahais.push(pai)
 
-    metrics = @getMetrics(@player().tehais, @player().furos, candDahais, forReach)
+    metrics = @getMetrics(@player().tehais, @player().furos, candDahais)
+    if reachDeclared
+      metrics = @selectTenpaiMetrics(metrics)
     @printMetrics(metrics)
     paiStr = @chooseBestMetric(metrics, true)
     console.log("decidedDahai", paiStr)
-    return new Pai(paiStr)
+    return {dahai: new Pai(paiStr), shanten: metrics[paiStr].shanten}
+
+  selectTenpaiMetrics: (metrics) ->
+    result = {}
+    for key, metric of metrics
+      if metric.shanten <= 0
+        result[key] = metric
+    return result
 
   decideFuro: (furoActions) ->
 
     metrics = {}
 
-    noneMetrics = @getMetrics(@player().tehais, @player().furos, [null], false)
+    noneMetrics = @getMetrics(@player().tehais, @player().furos, [null])
     metrics["none"] = noneMetrics["none"]
 
     for j in [0...furoActions.length]
@@ -88,7 +97,7 @@ class ManueAI extends AI
       for pai in tehais
         if (Util.all candDahais, ((p) -> !p.equal(pai))) && !@isKuikae(action, pai)
           candDahais.push(pai)
-      furoMetrics = @getMetrics(tehais, furos, candDahais, false)
+      furoMetrics = @getMetrics(tehais, furos, candDahais)
       for paiStr, metric of furoMetrics
         metrics["#{j}.#{paiStr}"] = metric
 
@@ -113,13 +122,11 @@ class ManueAI extends AI
     else
       return false
 
-  getMetrics: (tehais, furos, candDahais, forReach) ->
+  getMetrics: (tehais, furos, candDahais) ->
 
     analysis = new ShantenAnalysis(
         pai.id() for pai in tehais,
         {allowedExtraPais: 1})
-    if forReach
-      candDahais = @getPossibleDahaisForReach(candDahais, analysis)
 
     safeProbs = @getSafeProbs(candDahais, analysis)
     metrics = @getHoraEstimation(candDahais, analysis, tehais, furos)
@@ -153,56 +160,48 @@ class ManueAI extends AI
     sortedMetrics.sort(([k1, m1], [k2, m2]) -> m2.expectedPoints - m1.expectedPoints)
     if sortedMetrics.length == 0
       return
-    @log("| action | expPt | unsafeProb | horaProb | avgHoraPt | safeExpPt | unsafeExpPt |")
+    @log("| action | expPt | unsafeProb | horaProb | avgHoraPt | safeExpPt | unsafeExpPt |  shanten |")
     for [key, metric] in sortedMetrics
       @log(printf(
-          "| %-6s | %5d |      %.3f |    %.3f | %9d | %9d | %11d |",
+          "| %-6s | %5d |      %.3f |    %.3f | %9d | %9d | %11d | %8O |",
           key, 
           metric.expectedPoints, 
           1 - metric.safeProb, 
           metric.horaProb, 
           metric.averageHoraPoints, 
           metric.safeExpectedPoints, 
-          metric.unsafeExpectedPoints))
+          metric.unsafeExpectedPoints,
+          metric.shanten))
 
   getSafeProbs: (candDahais, analysis) ->
     safeProbs = {}
     for pai in candDahais
       key = (if pai then pai.toString() else "none")
       safeProbs[key] = 1
-    if analysis.shanten() > 0  # TODO Better handling of tenpai
-      for player in @game().players()
-        if player != @player() && player.reachState == "accepted"
-          scene = @_dangerEstimator.getScene(@game(), @player(), player)
-          probInfos = {}
-          for pai in candDahais
-            if pai
-              if scene.anpai(pai)
-                probInfo = {anpai: true}
-                safeProb = 1
-              else
-                probInfo = @_dangerEstimator.estimateProb(scene, pai)
-                features2 = []
-                for feature in probInfo.features
-                  features2.push("#{feature.name} #{feature.value}")
-                probInfo.features = features2
-                safeProb = 1 - probInfo.prob
-              safeProbs[pai.toString()] *= safeProb
-              probInfos[pai.toString()] = probInfo
+    for player in @game().players()
+      # reachState can be "declared" when we are making decision about furo for the reach pai.
+      if player != @player() && player.reachState != "none"
+        scene = @_dangerEstimator.getScene(@game(), @player(), player)
+        probInfos = {}
+        for pai in candDahais
+          if pai
+            if scene.anpai(pai)
+              probInfo = {anpai: true}
+              safeProb = 1
             else
-              safeProbs["none"] = 1
-          console.log("danger")
-          console.log(probInfos)
+              probInfo = @_dangerEstimator.estimateProb(scene, pai)
+              features2 = []
+              for feature in probInfo.features
+                features2.push("#{feature.name} #{feature.value}")
+              probInfo.features = features2
+              safeProb = 1 - probInfo.prob
+            safeProbs[pai.toString()] *= safeProb
+            probInfos[pai.toString()] = probInfo
+          else
+            safeProbs["none"] = 1
+        console.log("danger")
+        console.log(probInfos)
     return safeProbs
-
-  getPossibleDahaisForReach: (candDahais, analysis) ->
-    throwableVector = (0 for _ in [0...Pai.NUM_IDS])
-    for goal in analysis.goals()
-      if goal.shanten == 0
-        for pid in [0...Pai.NUM_IDS]
-          if goal.throwableVector[pid] > 0
-            throwableVector[pid] = 1
-    return (pai for pai in candDahais when throwableVector[pai.id()] > 0)
 
   getHoraEstimation: (candDahais, analysis, tehais, furos) ->
 
@@ -278,6 +277,13 @@ class ManueAI extends AI
               totalYakuToFanVector[pid][name] = fan
     #console.log("monte carlo", new Date() - @_start)
 
+    shantenVector = (Infinity for _ in [0...(Pai.NUM_IDS + 1)])
+    shantenVector[Pai.NUM_IDS] = analysis.shanten()
+    for goal in analysis.goals()
+      for pid in [0...Pai.NUM_IDS]
+        if goal.throwableVector[pid] > 0 && goal.shanten < shantenVector[pid]
+          shantenVector[pid] = goal.shanten
+
     metrics = {}
     for pai in candDahais
       pid = (if pai then pai.id() else Pai.NUM_IDS)
@@ -286,6 +292,7 @@ class ManueAI extends AI
         horaProb: totalHoraVector[pid] / numTries,
         averageHoraPoints: totalPointsVector[pid] / totalHoraVector[pid],
         expectedHoraPoints: totalPointsVector[pid] / numTries,
+        shanten: shantenVector[pid],
       }
       # for name, fan of totalYakuToFanVector[pid]
       #   stats[name] = Math.floor(fan / totalHoraVector[pid] * 1000) / 1000
