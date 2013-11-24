@@ -30,7 +30,10 @@ class ManueAI extends AI
           else if action.type == "tsumo" && @player().reachState == "accepted"
             return @createAction(type: "dahai", pai: action.pai, tsumogiri: true)
           else
-            decision = @decideDahai(action.cannotDahai || [], @player().reachState == "declared")
+            decision = @decideDahai(
+                action.cannotDahai || [],
+                @player().reachState == "declared",
+                possibleActions.reach)
             if possibleActions.reach && decision.shanten == 0
               return @createAction(possibleActions.reach)
             else
@@ -53,7 +56,7 @@ class ManueAI extends AI
 
     return @createAction(type: "none")
 
-  decideDahai: (forbiddenDahais, reachDeclared) ->
+  decideDahai: (forbiddenDahais, reachDeclared, canReach) ->
 
     candDahais = []
     for pai in @player().tehais
@@ -61,13 +64,32 @@ class ManueAI extends AI
           (Util.all forbiddenDahais, ((p) -> !p.equal(pai)))
         candDahais.push(pai)
 
-    metrics = @getMetrics(@player().tehais, @player().furos, candDahais)
-    if reachDeclared
-      metrics = @selectTenpaiMetrics(metrics)
+    metrics = {}
+    if canReach
+      nowMetrics = @getMetrics(@player().tehais, @player().furos, candDahais, "now")
+      nowMetrics = @selectTenpaiMetrics(nowMetrics)
+      @mergeMetrics(metrics, 0, nowMetrics)
+      neverMetrics = @getMetrics(@player().tehais, @player().furos, candDahais, "never")
+      @mergeMetrics(metrics, -1, neverMetrics)
+    else
+      defaultMetrics = @getMetrics(@player().tehais, @player().furos, candDahais, "default")
+      if reachDeclared
+        defaultMetrics = @selectTenpaiMetrics(defaultMetrics)
+      @mergeMetrics(metrics, -1, defaultMetrics)
+
     @printMetrics(metrics)
-    paiStr = @chooseBestMetric(metrics, true)
-    console.log("decidedDahai", paiStr)
-    return {dahai: new Pai(paiStr), shanten: metrics[paiStr].shanten}
+    key = @chooseBestMetric(metrics, true)
+    console.log("decidedKey", key)
+    [actionIdx, paiStr] = key.split(/\./)
+    return {
+      dahai: new Pai(paiStr),
+      shanten: metrics[key].shanten,
+      reach: parseInt(actionIdx) == 0,
+    }
+
+  mergeMetrics: (metrics, prefix, otherMetrics) ->
+    for key, metric of otherMetrics
+      metrics["#{prefix}.#{key}"] = metric
 
   selectTenpaiMetrics: (metrics) ->
     result = {}
@@ -80,7 +102,7 @@ class ManueAI extends AI
 
     metrics = {}
 
-    noneMetrics = @getMetrics(@player().tehais, @player().furos, [null])
+    noneMetrics = @getMetrics(@player().tehais, @player().furos, [null], "default")
     metrics["none"] = noneMetrics["none"]
 
     for j in [0...furoActions.length]
@@ -97,9 +119,8 @@ class ManueAI extends AI
       for pai in tehais
         if (Util.all candDahais, ((p) -> !p.equal(pai))) && !@isKuikae(action, pai)
           candDahais.push(pai)
-      furoMetrics = @getMetrics(tehais, furos, candDahais)
-      for paiStr, metric of furoMetrics
-        metrics["#{j}.#{paiStr}"] = metric
+      furoMetrics = @getMetrics(tehais, furos, candDahais, "default")
+      @mergeMetrics(metrics, j, furoMetrics)
 
     @printMetrics(metrics)
     key = @chooseBestMetric(metrics, false)
@@ -122,14 +143,14 @@ class ManueAI extends AI
     else
       return false
 
-  getMetrics: (tehais, furos, candDahais) ->
+  getMetrics: (tehais, furos, candDahais, reachMode) ->
 
     analysis = new ShantenAnalysis(
         pai.id() for pai in tehais,
         {allowedExtraPais: 1})
 
     safeProbs = @getSafeProbs(candDahais, analysis)
-    metrics = @getHoraEstimation(candDahais, analysis, tehais, furos)
+    metrics = @getHoraEstimation(candDahais, analysis, tehais, furos, reachMode)
 
     for pai in candDahais
       key = (if pai then pai.toString() else "none")
@@ -145,15 +166,10 @@ class ManueAI extends AI
     bestKey = null
     for key, metric of metrics
       if metric.expectedPoints > maxExpectedPoints ||
-          (metric.expectedPoints == maxExpectedPoints && preferBlack && @isBlackVersionOf(key, bestKey))
+          (metric.expectedPoints == maxExpectedPoints && preferBlack && key + "r" == bestKey)
         maxExpectedPoints = metric.expectedPoints
         bestKey = key
     return bestKey
-
-  isBlackVersionOf: (paiStr1, paiStr2) ->
-    pai1 = new Pai(paiStr1)
-    pai2 = new Pai(paiStr2)
-    return pai1.hasSameSymbol(pai2) && !pai1.red() && pai2.red()
 
   printMetrics: (metrics) ->
     sortedMetrics = ([k, m] for k, m of metrics)
@@ -203,21 +219,22 @@ class ManueAI extends AI
         console.log(probInfos)
     return safeProbs
 
-  getHoraEstimation: (candDahais, analysis, tehais, furos) ->
+  getHoraEstimation: (candDahais, analysis, tehais, furos, reachMode) ->
 
     @log("shanten=" + analysis.shanten())
     currentVector = new PaiSet(tehais).array()
     goals = []
     for goal in analysis.goals()
-      # If it's tenpai, tenpai must be kept because it has reached.
-      # If shanten > 3, including goals with extra pais is too slow.
-      if (analysis.shanten() >= 1 && analysis.shanten() <= 3) ||
-          goal.shanten == analysis.shanten()
-        goal.requiredBitVectors = @countVectorToBitVectors(goal.requiredVector)
-        goal.furos = furos
-        @calculateFan(goal, tehais)
-        if goal.points > 0
-          goals.push(goal)
+      if reachMode == "now" && goal.shanten > 0
+        continue
+      if analysis.shanten() > 3 && goal.shanten > analysis.shanten()
+        # If shanten > 3, including goals with extra pais is too slow.
+        continue
+      goal.requiredBitVectors = @countVectorToBitVectors(goal.requiredVector)
+      goal.furos = furos
+      @calculateFan(goal, tehais, reachMode)
+      if goal.points > 0
+        goals.push(goal)
     console.log("goals", goals.length)
     #console.log("requiredBitVectors", new Date() - @_start)
 
@@ -336,7 +353,7 @@ class ManueAI extends AI
       bitVectors.push(new BitVector(c >= i for c in countVector))
     return bitVectors
 
-  calculateFan: (goal, tehais) ->
+  calculateFan: (goal, tehais, reachMode) ->
 
     mentsus = []
     for mentsu in goal.mentsus
@@ -358,7 +375,8 @@ class ManueAI extends AI
     goal.yakus = []
     goal.fan = 0
 
-    @addYaku(goal, "reach", 1, 0)
+    if reachMode != "never"
+      @addYaku(goal, "reach", 1, 0)
 
     tanyaochu =
         Util.all allPais, (p) ->
