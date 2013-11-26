@@ -12,6 +12,7 @@ class ShantenAnalysis
     assert.ok(Util.all(pids, ((pid) => typeof(pid) == "number")))
     @_params = {
         allowedExtraPais: 0,
+        upperbound: Infinity,
     }
     for k, v of params
       @_params[k] = v
@@ -19,16 +20,18 @@ class ShantenAnalysis
     targetVector = (0 for _ in [0...NUM_PIDS])
     numMentsus = Math.floor(pids.length / 3)
     goals = []
-    @_shanten = @calculateShantensuInternal(
-        currentVector, targetVector, 0, numMentsus, 0, 1 / 0, [], goals) - 1
+    shanten = @calculateShantensuInternal(
+        currentVector, targetVector, -1, numMentsus, 0, @_params.upperbound, [], goals)
+    upperbound = Math.min(shanten + @_params.allowedExtraPais, @_params.upperbound)
     @_goals = []
     for goal in goals
-      if goal.shanten <= @_shanten + @_params.allowedExtraPais
+      if goal.shanten <= upperbound
         goal.requiredVector = for pid in [0...Pai.NUM_IDS]
           Math.max(goal.countVector[pid] - currentVector[pid], 0)
         goal.throwableVector = for pid in [0...Pai.NUM_IDS]
           Math.max(currentVector[pid] - goal.countVector[pid], 0)
         @_goals.push(goal)
+    @_shanten = if goals.length == 0 then Infinity else shanten
 
   pidsToCountVector: (pids) ->
     countVector = (0 for _ in [0...NUM_PIDS])
@@ -51,7 +54,7 @@ class ShantenAnalysis
             goalVector = vector1.concat([])
             goalVector[i] += 2
             goal = {
-                shanten: newShanten - 1,
+                shanten: newShanten,
                 mentsus: mentsus.concat([{type: "toitsu", pids: [i, i]}]),
                 countVector: goalVector,
             }

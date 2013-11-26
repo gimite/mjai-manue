@@ -126,52 +126,6 @@ class Game
       console.log("       ho: " + Pai.paisToStr(player.ho))
     console.log("")
 
-  canHora: (player, shantenAnalysis) ->
-    action = @_currentAction
-    if action.type == "tsumo" && action.actor == player
-      horaType = "tsumo"
-      pais = player.tehais
-    else if (action.type == "dahai" || action.type == "kakan") && action.actor != player
-      horaType = "ron"
-      pais = player.tehais.concat([action.pai])
-    else
-      return false
-    if !shantenAnalysis
-      shantenAnalysis = new ShantenAnalysis(pai.id() for pai in pais)  # TODO check only hora
-    # horaAction = new Action(
-    #     type: "hora", actor: player, target: action.actor, pai: action.pai)
-    # return shantenAnalysis.shanten() == -1 &&
-    #     getHora(horaAction, {previousAction: action}).valid() &&
-    #     (horaType == "tsumo" || !@isFuriten(player)
-    # TODO Implement yaku detection
-    return shantenAnalysis.shanten() == -1 &&
-        player.reachState == "accepted" &&
-        (horaType == "tsumo" || !@isFuriten(player))
-
-  canReach: (player, shantenAnalysis) ->
-    if !shantenAnalysis
-      # TODO check only tenpai
-      shantenAnalysis = new ShantenAnalysis(pai.id() for pai in player.tehais)
-    return @_currentAction.type == "tsumo" &&
-        @_currentAction.actor == player &&
-        shantenAnalysis.shanten() <= 0 &&
-        player.furos.length == 0 &&
-        player.reachState == "none" &&
-        @_numPipais >= 4 &&
-        player.score >= 1000
-
-  isFuriten: (player) ->
-    if player.tehais.length % 3 != 1 then return false
-    if Pai.UNKNOWN.isIn(player.tehais) then return false
-    shantenAnalysis = new ShantenAnalysis(pai.id() for pai in player.tehais)  # TODO check only tenpai
-    if shantenAnalysis.shanten() > 0 then return false
-    anpais = @anpais(player)
-    for goal in shantenAnalysis.goals()
-      for pid in [0...Pai.NUM_IDS]
-        if goal.requiredVector[pid] > 0 && new Pai(pid).isIn(anpais)
-          return true
-    return false
-
   anpais: (player) ->
     return player.sutehais.concat(player.extraAnpais)
 
