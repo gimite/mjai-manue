@@ -34,7 +34,7 @@ class ManueAI extends AI
                 action.cannotDahai || [],
                 @player().reachState == "declared",
                 possibleActions.reach)
-            if possibleActions.reach && decision.shanten == 0
+            if decision.reach
               return @createAction(possibleActions.reach)
             else
               return @createAction(

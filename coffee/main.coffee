@@ -4,7 +4,7 @@ ManueAI = require("./manue_ai")
 
 game = new TCPClientGame({
     url: process.argv[2],
-    name: "Manue2",
+    name: "Manue011",
     ai: new ManueAI(),
 })
 game.play()
