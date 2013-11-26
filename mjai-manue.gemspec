@@ -7,6 +7,7 @@ Gem::Specification.new do |s|
   s.summary = "Japanese Mahjong AI."
   s.description = "Japanese Mahjong AI."
   s.homepage = "https://github.com/gimite/mjai-manue"
+  s.license = "New BSD"
   s.rubygems_version = "1.2.0"
   
   s.files = Dir["bin/*"] + Dir["lib/**/*"] + Dir["share/**/*"]
