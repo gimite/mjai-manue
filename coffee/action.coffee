@@ -77,6 +77,8 @@ Action.FIELD_SPECS = {
     scores: "numbers",
     text: "string",
     message: "string",
+    protocol: "string",
+    protocol_version: "number",
     log: "string",
 }
 

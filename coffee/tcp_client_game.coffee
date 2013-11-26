@@ -1,5 +1,6 @@
 url = require("url")
 net = require("net")
+assert = require("assert")
 Action = require("./action")
 Pai = require("./pai")
 Furo = require("./furo")
@@ -34,6 +35,11 @@ class TCPClientGame extends Game
     action = Action.fromJson(line, this)
     switch action.type
       when "hello"
+        assert.equal(action.protocol, "mjsonp")
+        assert.ok(
+            action.protocolVersion >= 2,
+            "Server speaks an old protocol (protocol_version #{action.protocolVersion}, where >=2 is required). " +
+            "Update the mjai server.")
         responseJson = JSON.stringify({
             type: "join", 
             name: @_params.name, 
