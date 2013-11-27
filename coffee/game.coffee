@@ -92,16 +92,16 @@ class Game
             @deleteTehai(player, action.pai)
             ponIndex = null
             for i in [0...player.furos.length]
-              if player.furos[i].type == "pon" && player.furos[i].taken().hasSameSymbol(action.pai)
+              if player.furos[i].type() == "pon" && player.furos[i].taken().hasSameSymbol(action.pai)
                 ponIndex = i
                 break
             if ponIndex == null
               throw new Error("should not happen")
             player.furos[ponIndex] = new Furo({
                 type: "kakan",
-                taken: player.furos[ponIndex].taken,
-                consumed: player.furos[ponIndex].consumed.concat([action.pai]),
-                target: player.furos[ponIndex].target,
+                taken: player.furos[ponIndex].taken(),
+                consumed: player.furos[ponIndex].consumed().concat([action.pai]),
+                target: player.furos[ponIndex].target(),
             })
           when "reach"
             player.reachState = "declared"

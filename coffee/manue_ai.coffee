@@ -72,12 +72,14 @@ class ManueAI extends AI
       neverMetrics = @getMetrics(@player().tehais, @player().furos, candDahais, "never")
       @mergeMetrics(metrics, -1, neverMetrics)
     else
-      defaultMetrics = @getMetrics(@player().tehais, @player().furos, candDahais, "default")
+      defaultMetrics = @getMetrics(
+          @player().tehais, @player().furos, candDahais, if reachDeclared then "now" else "default")
       if reachDeclared
         defaultMetrics = @selectTenpaiMetrics(defaultMetrics)
       @mergeMetrics(metrics, -1, defaultMetrics)
 
     @printMetrics(metrics)
+    @printTenpaiProbs()
     key = @chooseBestMetric(metrics, true)
     console.log("decidedKey", key)
     [actionIdx, paiStr] = key.split(/\./)
@@ -123,6 +125,7 @@ class ManueAI extends AI
       @mergeMetrics(metrics, j, furoMetrics)
 
     @printMetrics(metrics)
+    @printTenpaiProbs()
     key = @chooseBestMetric(metrics, false)
     console.log("decidedKey", key)
 
@@ -188,6 +191,7 @@ class ManueAI extends AI
           metric.safeExpectedPoints, 
           metric.unsafeExpectedPoints,
           metric.shanten))
+    @log("")
 
   getSafeProbs: (candDahais, analysis) ->
     safeProbs = {}
@@ -195,9 +199,9 @@ class ManueAI extends AI
       key = (if pai then pai.toString() else "none")
       safeProbs[key] = 1
     for player in @game().players()
-      # reachState can be "declared" when we are making decision about furo for the reach pai.
-      if player != @player() && player.reachState != "none"
+      if player != @player()
         scene = @_dangerEstimator.getScene(@game(), @player(), player)
+        tenpaiProb = @getTenpaiProb(player)
         probInfos = {}
         for pai in candDahais
           if pai
@@ -210,7 +214,7 @@ class ManueAI extends AI
               for feature in probInfo.features
                 features2.push("#{feature.name} #{feature.value}")
               probInfo.features = features2
-              safeProb = 1 - probInfo.prob
+              safeProb = 1 - tenpaiProb * probInfo.prob
             safeProbs[pai.toString()] *= safeProb
             probInfos[pai.toString()] = probInfo
           else
@@ -219,9 +223,27 @@ class ManueAI extends AI
         console.log(probInfos)
     return safeProbs
 
+  getTenpaiProb: (player) ->
+    if player.reachState != "none"
+      return 1
+    else
+      numRemainTurns = Math.floor(@game().numPipais() / 4)
+      numFuros = player.furos.length
+      stat = @_stats.yamitenStats["#{numRemainTurns},#{numFuros}"]
+      if stat
+        return stat.tenpai / stat.total
+      else
+        return 1
+
+  printTenpaiProbs: ->
+    output = ""
+    for player in @game().players()
+      if player != @player()
+        output += printf("%d: %.3f  ", player.id, @getTenpaiProb(player))
+    @log("tenpaiProbs:  " + output)
+
   getHoraEstimation: (candDahais, analysis, tehais, furos, reachMode) ->
 
-    @log("shanten=" + analysis.shanten())
     currentVector = new PaiSet(tehais).array()
     goals = []
     for goal in analysis.goals()
