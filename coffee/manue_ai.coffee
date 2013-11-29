@@ -155,14 +155,50 @@ class ManueAI extends AI
     safeProbs = @getSafeProbs(candDahais, analysis)
     metrics = @getHoraEstimation(candDahais, analysis, tehais, furos, reachMode)
 
+    tenpaiRyukyokuAveragePoints = @getRyukyokuAveragePoints(true)
+    notenRyukyokuAveragePoints = @getRyukyokuAveragePoints(false)
+    ryukyokuProb = @getRyukyokuProb()
+
     for pai in candDahais
       key = (if pai then pai.toString() else "none")
       metric = metrics[key]
       metric.safeProb = safeProbs[key]
       metric.safeExpectedPoints = metric.safeProb * metric.expectedHoraPoints
       metric.unsafeExpectedPoints = -(1 - metric.safeProb) * @_stats.averageHoraPoints
-      metric.expectedPoints = metric.safeExpectedPoints + metric.unsafeExpectedPoints
+      metric.ryukyokuProb = ryukyokuProb
+      if metric.shanten <= 0
+        metric.ryukyokuAveragePoints = tenpaiRyukyokuAveragePoints
+      else
+        metric.ryukyokuAveragePoints = notenRyukyokuAveragePoints
+      metric.ryukyokuExpectedPoints = metric.safeProb * ryukyokuProb * metric.ryukyokuAveragePoints
+      metric.expectedPoints =
+          metric.safeExpectedPoints + metric.unsafeExpectedPoints + metric.ryukyokuExpectedPoints
     return metrics
+
+  getRyukyokuAveragePoints: (selfTenpai) ->
+    ryukyokuTenpaiProb = @_stats.ryukyokuTenpaiStat.tenpai / @_stats.ryukyokuTenpaiStat.total
+    ryukyokuTenpaiProbs = for i in [0...4]
+      player = @game().players()[i]
+      if player == @player()
+        if selfTenpai then 1 else 0
+      else
+        if player.reachState == "none" then ryukyokuTenpaiProb else 1
+    result = 0
+    for i in [0...Math.pow(2, 4)]
+      prob = 1
+      numTenpais = 0
+      for j in [0...4]
+        tenpai = (i & Math.pow(2, j)) != 0
+        prob *= (if tenpai then ryukyokuTenpaiProbs[j] else 1 - ryukyokuTenpaiProbs[j])
+        if tenpai
+          ++numTenpais
+      if prob > 0
+        if selfTenpai
+          points = (if numTenpais == 4 then 0 else 3000 / numTenpais)
+        else
+          points = (if numTenpais == 0 then 0 else -3000 / (4 - numTenpais))
+        result += prob * points
+    return result
 
   chooseBestMetric: (metrics, preferBlack) ->
     maxExpectedPoints = -1 / 0
@@ -179,10 +215,12 @@ class ManueAI extends AI
     sortedMetrics.sort(([k1, m1], [k2, m2]) -> m2.expectedPoints - m1.expectedPoints)
     if sortedMetrics.length == 0
       return
-    @log("| action | expPt | unsafeProb | horaProb | avgHoraPt | safeExpPt | unsafeExpPt |  shanten |")
+    @log(
+        "| action | expPt | unsafeProb | horaProb | avgHoraPt | safeExpPt | unsafeExpPt " +
+        "| ryukyokuProb | ryukyokuAvgPt |  shanten |")
     for [key, metric] in sortedMetrics
       @log(printf(
-          "| %-6s | %5d |      %.3f |    %.3f | %9d | %9d | %11d | %8O |",
+          "| %-6s | %5d |      %.3f |    %.3f | %9d | %9d | %11d |        %.3f | %13d | %8O |",
           key, 
           metric.expectedPoints, 
           1 - metric.safeProb, 
@@ -190,6 +228,8 @@ class ManueAI extends AI
           metric.averageHoraPoints, 
           metric.safeExpectedPoints, 
           metric.unsafeExpectedPoints,
+          metric.ryukyokuProb,
+          metric.ryukyokuAveragePoints,
           metric.shanten))
     @log("")
 
@@ -524,6 +564,13 @@ class ManueAI extends AI
       num += prob * (i - currentTurn + 0.5)
       den += prob
     return (if den == 0 then 0 else Math.round(num / den))
+
+  getRyukyokuProb: ->
+    currentTurn = Math.floor((Game.NUM_INITIAL_PIPAIS - @game().numPipais()) / 4)
+    den = 0
+    for i in [currentTurn...@_stats.numTurnsDistribution.length]
+      den += @_stats.numTurnsDistribution[i]
+    return @_stats.ryukyokuRatio / den
 
   categorizeActions: (actions) ->
     result = {
