@@ -176,29 +176,43 @@ class ManueAI extends AI
     return metrics
 
   getRyukyokuAveragePoints: (selfTenpai) ->
-    ryukyokuTenpaiProb = @_stats.ryukyokuTenpaiStat.tenpai / @_stats.ryukyokuTenpaiStat.total
+
+    notenRyukyokuTenpaiProb = @getNotenRyukyokuTenpaiProb()
     ryukyokuTenpaiProbs = for i in [0...4]
       player = @game().players()[i]
       if player == @player()
-        if selfTenpai then 1 else 0
+        currentTenpaiProb = (if selfTenpai then 1 else 0)
       else
-        if player.reachState == "none" then ryukyokuTenpaiProb else 1
+        currentTenpaiProb = @getTenpaiProb(player)
+      currentTenpaiProb * 1 + (1 - currentTenpaiProb) * notenRyukyokuTenpaiProb
+
     result = 0
     for i in [0...Math.pow(2, 4)]
+      tenpais = ((i & Math.pow(2, j)) != 0 for j in [0...4])
       prob = 1
       numTenpais = 0
       for j in [0...4]
-        tenpai = (i & Math.pow(2, j)) != 0
-        prob *= (if tenpai then ryukyokuTenpaiProbs[j] else 1 - ryukyokuTenpaiProbs[j])
-        if tenpai
+        prob *= (if tenpais[j] then ryukyokuTenpaiProbs[j] else 1 - ryukyokuTenpaiProbs[j])
+        if tenpais[j]
           ++numTenpais
       if prob > 0
-        if selfTenpai
+        if tenpais[@player().id]
           points = (if numTenpais == 4 then 0 else 3000 / numTenpais)
         else
           points = (if numTenpais == 0 then 0 else -3000 / (4 - numTenpais))
         result += prob * points
     return result
+
+  # Probability that the player is tenpai at the end of the kyoku if the player is currently
+  # noten and the kyoku ends with ryukyoku.
+  getNotenRyukyokuTenpaiProb: ->
+    notenFreq = @_stats.ryukyokuTenpaiStat.noten
+    tenpaiFreq = 0
+    t = @game().turn() + 1 / 4
+    while t <= Game.FINAL_TURN
+      tenpaiFreq += @_stats.ryukyokuTenpaiStat.tenpaiTurnDistribution[t]
+      t += 1 / 4
+    return tenpaiFreq / (tenpaiFreq + notenFreq)
 
   chooseBestMetric: (metrics, preferBlack) ->
     maxExpectedPoints = -1 / 0

@@ -38,7 +38,7 @@ class YamitenCounter
         if !(key of @stats)
           @stats[key] = {total: 0, tenpai: 0}
         ++@stats[key].total
-        if new ShantenAnalysis(pai.id() for pai in action.actor.tehais, {upperbound: 0}).shanten() <= 0
+        if game.isTenpai(action.actor)
           ++@stats[key].tenpai
 
 class RyukyokuTenpaiCounter
@@ -46,14 +46,29 @@ class RyukyokuTenpaiCounter
   constructor: ->
     @total = 0
     @tenpai = 0
+    @noten = 0
+    @tenpaiTurnDistribution = {}
+    i = 0
+    while i <= Game.FINAL_TURN
+      @tenpaiTurnDistribution[i] = 0
+      i += 1 / 4
 
   onAction: (action, game) ->
     switch action.type
+      when "start_kyoku"
+        @tenpaiTurns = (null for _ in [0...4])
+      when "dahai"
+        # TODO Support kokushimuso and chitoitsu
+        if @tenpaiTurns[action.actor.id] == null && game.isTenpai(action.actor)
+          @tenpaiTurns[action.actor.id] = game.turn()
       when "ryukyoku"
-        for tenpai in action.tenpais
+        for player in game.players()
           ++@total
-          if tenpai
+          if action.tenpais[player.id]
             ++@tenpai
+            ++@tenpaiTurnDistribution[@tenpaiTurns[player.id]]
+          else
+            ++@noten
 
 basic = new BasicCounter()
 yamiten = new YamitenCounter()
@@ -78,6 +93,8 @@ stats = {
   ryukyokuTenpaiStat: {
     total: ryukyokuTenpai.total,
     tenpai: ryukyokuTenpai.tenpai,
+    noten: ryukyokuTenpai.noten,
+    tenpaiTurnDistribution: ryukyokuTenpai.tenpaiTurnDistribution,
   }
 }
 console.log(JSON.stringify(stats))

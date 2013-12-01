@@ -1,5 +1,6 @@
 fs = require("fs")
 printf = require("printf")
+Game = require("./game")
 
 stats = JSON.parse(fs.readFileSync(process.argv[2]).toString("utf-8"))
 
@@ -19,4 +20,19 @@ for i in [0...18]
         yamitenStat.tenpai,
         yamitenStat.total)
   console.log(line)
+console.log("")
+
+console.log("ryukyokuTenpaiStat:")
+i = 0
+while i <= Game.FINAL_TURN
+  console.log(printf(
+      "  %5.2f: %.3f (%d)",
+      i,
+      stats.ryukyokuTenpaiStat.tenpaiTurnDistribution[i] / stats.ryukyokuTenpaiStat.total,
+      stats.ryukyokuTenpaiStat.tenpaiTurnDistribution[i]))
+  i += 1 / 4
+console.log(printf(
+    "  noten: %.3f (%d)",
+    stats.ryukyokuTenpaiStat.noten / stats.ryukyokuTenpaiStat.total,
+    stats.ryukyokuTenpaiStat.noten))
 console.log("")

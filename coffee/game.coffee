@@ -12,6 +12,7 @@ class Game
 
     @_previousAction = @_currentAction
     @_currentAction = action
+    @_tenpais = (null for i in [0...4])
 
     switch action.type
       when "start_game"
@@ -175,11 +176,21 @@ class Game
       throw new Error("trying to delete #{pai} which is not in tehais: #{player.tehais}")
     player.tehais.splice(paiIndex, 1)
 
+  turn: ->
+    return (Game.NUM_INITIAL_PIPAIS - @numPipais()) / 4
+
+  isTenpai: (player) ->
+    if @_tenpais[player.id] == null
+      analysis = new ShantenAnalysis(pai.id() for pai in player.tehais, {upperbound: 0})
+      @_tenpais[player.id] = analysis.shanten() <= 0
+    return @_tenpais[player.id]
+
   setState: (state) ->
     for k, v of state
       this["_#{k}"] = v
 
 Game.NUM_INITIAL_PIPAIS = Pai.NUM_IDS * 4 - 13 * 4 - 14
+Game.FINAL_TURN = Game.NUM_INITIAL_PIPAIS / 4
 
 Game.getDefaultStateForTest = ->
   players = []
