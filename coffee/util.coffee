@@ -29,4 +29,12 @@ Util =
   camelCase: (name) ->
     return name.replace(/_(.)/g, (_, ch) -> ch.toUpperCase())
 
+  shuffle: (array, random, n = array.length) ->
+    for i in [0...n]
+      j = i + Math.floor(random() * (array.length - i))
+      tmp = array[i]
+      array[i] = array[j]
+      array[j] = tmp
+    return array
+
 module.exports = Util

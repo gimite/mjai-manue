@@ -1,5 +1,6 @@
 fs = require("fs")
 printf = require("printf")
+seedRandom = require("seed-random")
 AI = require("./ai")
 Pai = require("./pai")
 PaiSet = require("./pai_set")
@@ -329,13 +330,15 @@ class ManueAI extends AI
     #console.log("invisiblePids", Pai.paisToStr(new Pai(pid) for pid in invisiblePids))
 
     numTsumos = @getNumExpectedRemainingTurns()
-    console.log("numTsumos", numTsumos)
     numTries = 1000
+    # Uses a fixed seed to get a reproducable result, and to make the result comparable
+    # e.g., with and without reach.
+    random = seedRandom("")
     totalHoraVector = (0 for _ in [0...(Pai.NUM_IDS + 1)])
     totalPointsVector = (0 for _ in [0...(Pai.NUM_IDS + 1)])
     totalYakuToFanVector = ({} for _ in [0...(Pai.NUM_IDS + 1)])
     for i in [0...numTries]
-      @shuffle(invisiblePids, numTsumos)
+      Util.shuffle(invisiblePids, random, numTsumos)
       tsumoVector = new PaiSet(new Pai(pid) for pid in invisiblePids[0...numTsumos]).array()
       tsumoBitVectors = @countVectorToBitVectors(tsumoVector)
       horaVector = (0 for _ in [0...(Pai.NUM_IDS + 1)])
@@ -411,14 +414,6 @@ class ManueAI extends AI
     #     console.log("  decidedDahai", pai.toString())
     #     return pai
     # throw new Error("should not happen")
-
-  shuffle: (array, n = array.length) ->
-    for i in [0...n]
-      j = i + Math.floor(Math.random() * (array.length - i))
-      tmp = array[i]
-      array[i] = array[j]
-      array[j] = tmp
-    return array
 
   countVectorToStr: (countVector) ->
     return new PaiSet({array: countVector}).toString()
