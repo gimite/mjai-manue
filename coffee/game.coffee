@@ -185,6 +185,18 @@ class Game
       @_tenpais[player.id] = analysis.shanten() <= 0
     return @_tenpais[player.id]
 
+  getDistance: (player1, player2) ->
+    return (4 + player1.id - player2.id) % 4
+
+  rankedPlayers: ->
+    return @_players.sort (p1, p2) =>
+      if p1.score > p2.score
+        return -1
+      else if p1.score < p2.score
+        return 1
+      else
+        return @getDistance(p1, @_chicha) - @getDistance(p2, @_chicha)
+
   setState: (state) ->
     for k, v of state
       this["_#{k}"] = v
@@ -217,6 +229,6 @@ Game.getDefaultStateForTest = ->
     numPipais: Game.NUM_INITIAL_PIPAIS,
   }
 
-Util.attrReader(Game, ["players", "doraMarkers", "bakaze", "oya", "numPipais"])
+Util.attrReader(Game, ["players", "doraMarkers", "bakaze", "kyokuNum", "oya", "chicha", "numPipais"])
 
 module.exports = Game

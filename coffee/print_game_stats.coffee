@@ -36,3 +36,17 @@ console.log(printf(
     stats.ryukyokuTenpaiStat.noten / stats.ryukyokuTenpaiStat.total,
     stats.ryukyokuTenpaiStat.noten))
 console.log("")
+
+console.log("scoreStats:")
+for i in [0...4]
+  for j in [0...4]
+    if i == j then continue
+    for k in [-30...30]
+      scoreDiff = k * 1000
+      line = printf("  %d,%d %6d ", i, j, scoreDiff)
+      for kyokuName in ["E1", "E2", "E3", "E4", "S1", "S2", "S3", "S4"]
+        stat = stats.scoreStats["#{kyokuName},#{i},#{j},#{scoreDiff}"]
+        if !stat
+          stat = {total: 0, win: 0}
+        line += printf("%.3f(%4d/%4d) ", stat.win / stat.total, stat.win, stat.total)
+      console.log(line)
