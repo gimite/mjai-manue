@@ -110,27 +110,26 @@ ryukyokuTenpai = new RyukyokuTenpaiCounter()
 score = new ScoreCounter()
 counters = [basic, yamiten, ryukyokuTenpai, score]
 
-paths = process.argv[2...]
-for i in [0...paths.length]
-  console.error("#{i} / #{paths.length}")
-  archive = new Archive(paths[i])
-  archive.play (action) =>
-    if action.type == "error"
-      throw new Error("error in the log: #{paths[i]}")
-    for counter in counters
-      counter.onAction(action, archive)
+archive = new Archive(process.argv[2...])
+onAction = (action) =>
+  if action.type == "error"
+    throw new Error("error in the log: #{paths[i]}")
+  for counter in counters
+    counter.onAction(action, archive)
+onEnd = =>
+  stats = {
+    numTurnsDistribution: (f / basic.numKyokus for f in basic.numTurnsFreqs),
+    ryukyokuRatio: basic.numRyukyokus / basic.numKyokus,
+    averageHoraPoints: basic.totalHoraPoints / basic.numHoras,
+    yamitenStats: yamiten.stats,
+    ryukyokuTenpaiStat: {
+      total: ryukyokuTenpai.total,
+      tenpai: ryukyokuTenpai.tenpai,
+      noten: ryukyokuTenpai.noten,
+      tenpaiTurnDistribution: ryukyokuTenpai.tenpaiTurnDistribution,
+    },
+    scoreStats: score.stats,
+  }
+  console.log(JSON.stringify(stats))
+archive.play(onAction, onEnd)
 
-stats = {
-  numTurnsDistribution: (f / basic.numKyokus for f in basic.numTurnsFreqs),
-  ryukyokuRatio: basic.numRyukyokus / basic.numKyokus,
-  averageHoraPoints: basic.totalHoraPoints / basic.numHoras,
-  yamitenStats: yamiten.stats,
-  ryukyokuTenpaiStat: {
-    total: ryukyokuTenpai.total,
-    tenpai: ryukyokuTenpai.tenpai,
-    noten: ryukyokuTenpai.noten,
-    tenpaiTurnDistribution: ryukyokuTenpai.tenpaiTurnDistribution,
-  },
-  scoreStats: score.stats,
-}
-console.log(JSON.stringify(stats))
