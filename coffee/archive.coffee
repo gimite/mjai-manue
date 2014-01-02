@@ -30,7 +30,7 @@ class Archive extends Game
 
   play: (onAction, onEnd) ->
     onLightAction = (lightAction) =>
-      action = Action.fromPlain(lightAction)
+      action = Action.fromPlain(lightAction, this)
       @updateState(action)
       onAction(action)
     @playLight(onLightAction, onEnd)

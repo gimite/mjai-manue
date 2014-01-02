@@ -10,7 +10,7 @@ class Game
 
   updateState: (action) ->
 
-    @_previousAction = @_currentAction
+    @_previousAction = (if action.type == "start_game" then null else @_currentAction)
     @_currentAction = action
     @_tenpais = (null for i in [0...4])
 

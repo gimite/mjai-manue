@@ -22,6 +22,21 @@ class BasicCounter
         ++@numKyokus
         ++@numTurnsFreqs[Math.floor((Game.NUM_INITIAL_PIPAIS - game.numPipais()) / 4)]
 
+class HoraPointsCounter
+
+  constructor: ->
+    @koFreqs = {total: 0}
+    @oyaFreqs = {total: 0}
+
+  onAction: (action, game) ->
+    switch action.type
+      when "hora"
+        freqs = (if action.actor == game.oya() then @oyaFreqs else @koFreqs)
+        ++freqs.total
+        if !(action.horaPoints of freqs)
+          freqs[action.horaPoints] = 0
+        ++freqs[action.horaPoints]
+
 class YamitenCounter
 
   constructor: ->
@@ -105,10 +120,11 @@ class ScoreCounter
         @kyokuStats = []
 
 basic = new BasicCounter()
+horaPoints = new HoraPointsCounter()
 yamiten = new YamitenCounter()
 ryukyokuTenpai = new RyukyokuTenpaiCounter()
 score = new ScoreCounter()
-counters = [basic, yamiten, ryukyokuTenpai, score]
+counters = [basic, horaPoints, yamiten, ryukyokuTenpai, score]
 
 archive = new Archive(process.argv[2...])
 onAction = (action) =>
@@ -121,6 +137,8 @@ onEnd = =>
     numTurnsDistribution: (f / basic.numKyokus for f in basic.numTurnsFreqs),
     ryukyokuRatio: basic.numRyukyokus / basic.numKyokus,
     averageHoraPoints: basic.totalHoraPoints / basic.numHoras,
+    koHoraPointsFreqs: horaPoints.koFreqs,
+    oyaHoraPointsFreqs: horaPoints.oyaFreqs,
     yamitenStats: yamiten.stats,
     ryukyokuTenpaiStat: {
       total: ryukyokuTenpai.total,
