@@ -3,6 +3,7 @@ glob = require("glob")
 printf = require("printf")
 Game = require("./game")
 Archive = require("./archive")
+Util = require("./util")
 
 class ScoreCounter
 
@@ -43,19 +44,7 @@ class ScoreCounter
 score = new ScoreCounter()
 counters = [score]
 
-globAll = (patterns, callback, i = 0, result = []) ->
-  if i >= patterns.length
-    callback(undefined, result)
-  else
-    glob patterns[i], (err, paths) =>
-      if err
-        callback(err)
-      else
-        for path in paths
-          result.push(path)
-        globAll(patterns, callback, i + 1, result)
-
-globAll process.argv[2...], (err, paths) =>
+Util.globAll process.argv[2...], (err, paths) =>
   if err
     throw new Error(printf("Error in glob: %O", err))
   archive = new Archive(paths)

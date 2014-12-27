@@ -9,13 +9,17 @@ BitVector = require("./bit_vector")
 DangerEstimator = require("./danger_estimator")
 Game = require("./game")
 Furo = require("./furo")
+ProbDist = require("./prob_dist")
+HashMap = require("./hash_map")
+TenpaiProbEstimator = require("./tenpai_prob_estimator")
 Util = require("./util")
 
 class ManueAI extends AI
 
   constructor: ->
-    @_dangerEstimator = new DangerEstimator()
     @_stats = JSON.parse(fs.readFileSync("../share/game_stats.json").toString("utf-8"))
+    @_dangerEstimator = new DangerEstimator()
+    @_tenpaiProbEstimator = new TenpaiProbEstimator(@_stats)
 
   respondToAction: (action) ->
 
@@ -154,6 +158,7 @@ class ManueAI extends AI
         {allowedExtraPais: 1})
 
     safeProbs = @getSafeProbs(candDahais, analysis)
+    hojuScoreChangesDists = @getHojuScoreChangesDists(candDahais)
     metrics = @getHoraEstimation(candDahais, analysis, tehais, furos, reachMode)
 
     tenpaiRyukyokuAveragePoints = @getRyukyokuAveragePoints(true)
@@ -174,7 +179,27 @@ class ManueAI extends AI
       metric.ryukyokuExpectedPoints = metric.safeProb * ryukyokuProb * metric.ryukyokuAveragePoints
       metric.expectedPoints =
           metric.safeExpectedPoints + metric.unsafeExpectedPoints + metric.ryukyokuExpectedPoints
+      metric.scoreChangesDistOnHora = @getScoreChangesDistOnHora(metric)
     return metrics
+
+  getScoreChangesDistOnHora: (metric) ->
+    tsumoHoraProb = @_stats.numTsumoHoras / @_stats.numHoras
+    unitDistMap = new HashMap()
+    for target in @game().players()
+      if target != @player()
+        changes = (0 for _ in [0...4])
+        changes[@player().id] = 1
+        changes[target.id] = -1
+      else if @player() == @game().oya()
+        changes = (-1/3 for _ in [0...4])
+        changes[@player().id] = 1
+      else
+        changes = (-1/4 for _ in [0...4])
+        changes[@player().id] = 1
+        changes[@game().oya().id] = -1/2
+      prob = (if target == @player() then tsumoHoraProb else (1 - tsumoHoraProb) / 3)
+      unitDistMap.set(changes, prob)
+    return ProbDist.mult(metric.horaPointsDist, new ProbDist(unitDistMap))
 
   getRyukyokuAveragePoints: (selfTenpai) ->
 
@@ -203,6 +228,32 @@ class ManueAI extends AI
           points = (if numTenpais == 0 then 0 else -3000 / (4 - numTenpais))
         result += prob * points
     return result
+
+  getRyukyokuScoreChangesDist: (selfTenpai) ->
+    notenRyukyokuTenpaiProb = @getNotenRyukyokuTenpaiProb()
+    tenpaisDist = new ProbDist([0, 0, 0, 0])
+    for player in @game().players()
+      if player == @player()
+        currentTenpaiProb = (if selfTenpai then 1 else 0)
+      else
+        currentTenpaiProb = @getTenpaiProb(player)
+      ryukyokuTenpaiProb = currentTenpaiProb * 1 + (1 - currentTenpaiProb) * notenRyukyokuTenpaiProb
+      tenpais = ((if p == player then 1 else 0) for p in @game().players())
+      dist = new ProbDist(new HashMap([
+          [[0, 0, 0, 0], 1 - ryukyokuTenpaiProb],
+          [tenpais, ryukyokuTenpaiProb]]))
+      tenpaisDist = ProbDist.add(tenpaisDist, dist)
+    return tenpaisDist.mapValue(this.tenpaisToRyukyokuPoints)
+
+  tenpaisToRyukyokuPoints: (tenpais) ->
+    numTenpais = Util.count(tenpais, (t) => t)
+    if numTenpais == 0 || numTenpais == 4
+      return [0, 0, 0, 0]
+    else
+      return (
+        for tenpai in tenpais
+          if tenpai then 3000 / numTenpais else -3000 / (4 - numTenpais)
+      )
 
   # Probability that the player is tenpai at the end of the kyoku if the player is currently
   # noten and the kyoku ends with ryukyoku.
@@ -246,6 +297,10 @@ class ManueAI extends AI
           metric.ryukyokuProb,
           metric.ryukyokuAveragePoints,
           metric.shanten))
+      # console.log(key, "horaPoints", metric.horaPointsDist.toString(), metric.horaPointsDist.expected())
+      console.log(key, "scoreChangesOnHora",
+          metric.scoreChangesDistOnHora.toString(),
+          metric.scoreChangesDistOnHora.expected())
     @log("")
 
   getSafeProbs: (candDahais, analysis) ->
@@ -277,6 +332,50 @@ class ManueAI extends AI
         console.log("danger")
         console.log(probInfos)
     return safeProbs
+
+  getHojuScoreChangesDists: (candDahais) ->
+    safeChanges = (0 for _ in [0...4])
+    scoreChangesDists = {}
+    for pai in candDahais
+      key = (if pai then pai.toString() else "none")
+      scoreChangesDists[key] = new ProbDist(safeChanges)
+    for player in @game().players()
+      if player != @player()
+        scene = @_dangerEstimator.getScene(@game(), @player(), player)
+        tenpaiProb = @_tenpaiProbEstimator.estimate(player, @game())
+        probInfos = {}
+        horaPointsFreqs = (
+            if player == @game().oya() then @_stats.oyaHoraPointsFreqs else @_stats.koHoraPointsFreqs)
+        items = []
+        for points, freq of horaPointsFreqs
+          if points == "total" then continue
+          items.push([parseInt(points), freq / horaPointsFreqs.total])
+        horaPointsDist = new ProbDist(new HashMap(items))
+        hojuChanges = (0 for _ in [0...4])
+        hojuChanges[player.id] = 1
+        hojuChanges[@player().id] = -1
+        for pai in candDahais
+          key = (if pai then pai.toString() else "none")
+          if pai
+            if scene.anpai(pai)
+              probInfo = {anpai: true}
+              hojuProb = 0
+            else
+              probInfo = @_dangerEstimator.estimateProb(scene, pai)
+              features2 = []
+              for feature in probInfo.features
+                features2.push("#{feature.name} #{feature.value}")
+              probInfo.features = features2
+              hojuProb = tenpaiProb * probInfo.prob
+            unitDist = new ProbDist(new HashMap([[hojuChanges, hojuProb], [safeChanges, 1 - hojuProb]]))
+            # Considers only the first ron for double/triple ron to avoid too many combinations.
+            scoreChangesDists[key] = scoreChangesDists[key].replace(
+                safeChanges,
+                ProbDist.mult(horaPointsDist, unitDist))
+            probInfos[key] = probInfo
+        console.log("danger")
+        console.log(probInfos)
+    return scoreChangesDists
 
   getTenpaiProb: (player) ->
     if player.reachState != "none"
@@ -336,6 +435,7 @@ class ManueAI extends AI
     random = seedRandom("")
     totalHoraVector = (0 for _ in [0...(Pai.NUM_IDS + 1)])
     totalPointsVector = (0 for _ in [0...(Pai.NUM_IDS + 1)])
+    totalPointsFreqsVector = ({} for _ in [0...(Pai.NUM_IDS + 1)])
     totalYakuToFanVector = ({} for _ in [0...(Pai.NUM_IDS + 1)])
     for i in [0...numTries]
       Util.shuffle(invisiblePids, random, numTsumos)
@@ -365,7 +465,11 @@ class ManueAI extends AI
       for pid in [0...(Pai.NUM_IDS + 1)]
         if horaVector[pid] == 1
           ++totalHoraVector[pid]
-          totalPointsVector[pid] += pointsVector[pid]
+          points = pointsVector[pid]
+          totalPointsVector[pid] += points
+          if !(points of totalPointsFreqsVector[pid])
+            totalPointsFreqsVector[pid][points] = 0
+          ++totalPointsFreqsVector[pid][points]
           for name, fan of yakuToFanVector[pid]
             if name of totalYakuToFanVector[pid]
               totalYakuToFanVector[pid][name] += fan
@@ -387,6 +491,8 @@ class ManueAI extends AI
       metrics[key] = {
         horaProb: totalHoraVector[pid] / numTries,
         averageHoraPoints: totalPointsVector[pid] / totalHoraVector[pid],
+        horaPointsDist: new ProbDist(new HashMap(
+            [parseInt(points), freq / totalHoraVector[pid]] for points, freq of totalPointsFreqsVector[pid]))
         expectedHoraPoints: totalPointsVector[pid] / numTries,
         shanten: shantenVector[pid],
       }
@@ -595,6 +701,15 @@ class ManueAI extends AI
       else
         result.furos.push(action)
     return result
+
+  setDangerEstimatorForTest: (estimator) ->
+    @_dangerEstimator = estimator
+
+  setTenpaiProbEstimatorForTest: (estimator) ->
+    @_tenpaiProbEstimator = estimator
+
+  setStatsForTest: (stats) ->
+    @_stats = stats
 
 ManueAI.getAllPids = ->
   allPids = []

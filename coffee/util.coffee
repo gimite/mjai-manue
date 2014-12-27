@@ -1,3 +1,7 @@
+glob = require("glob")
+assert = require("assert")
+printf = require("printf")
+
 Util =
 
   attrReader: (cls, names) ->
@@ -36,5 +40,20 @@ Util =
       array[i] = array[j]
       array[j] = tmp
     return array
+
+  globAll: (patterns, callback, i = 0, result = []) ->
+    if i >= patterns.length
+      callback(undefined, result)
+    else
+      glob patterns[i], (err, paths) =>
+        if err
+          callback(err)
+        else
+          for path in paths
+            result.push(path)
+          Util.globAll(patterns, callback, i + 1, result)
+
+  assertAlmostEqual: (actual, expected, error = 0.0001) ->
+    assert.ok(Math.abs(actual - expected) <= error, printf("%O != %O", actual, expected))
 
 module.exports = Util
