@@ -102,7 +102,7 @@ goal = {
 ai.calculateFan(goal, [])
 assert.ok(hasYaku(goal, "adr", 1))
 
-dists = ai.getHojuScoreChangesDists([new Pai("1m")])
+dists = ai.getImmediateScoreChangesDists([new Pai("1m")])
 #console.log(dists["1m"].toString())
 Util.assertAlmostEqual(dists["1m"].dist().get([0, 0, 0, 0]), 0.5625)
 Util.assertAlmostEqual(dists["1m"].dist().get([1500, -1500, 0, 0]), 0.125)
@@ -136,10 +136,10 @@ state.players[0].reachState = "accepted"
 game.setState(state)
 ai = new ManueAI()
 ai.initialize(game, me)
-dists = ai.getHojuScoreChangesDists(Pai.strToPais("2m 2p"))
+dists = ai.getImmediateScoreChangesDists(Pai.strToPais("2m 2p"))
 assert.ok(dists["2m"].expected()[1] > dists["2p"].expected()[1])
 
-dist = ai.getRyukyokuScoreChangesDist(true)
+dist = ai.getScoreChangesDistOnRyukyoku(true)
 Util.assertAlmostEqual(dist.dist().get([1500, 1500, -1500, -1500]), 0.3663)
-dist = ai.getRyukyokuScoreChangesDist(false)
+dist = ai.getScoreChangesDistOnRyukyoku(false)
 Util.assertAlmostEqual(dist.dist().get([1500, 1500, -1500, -1500]), 0.1446)

@@ -20,6 +20,7 @@ class ManueAI extends AI
     @_stats = JSON.parse(fs.readFileSync("../share/game_stats.json").toString("utf-8"))
     @_dangerEstimator = new DangerEstimator()
     @_tenpaiProbEstimator = new TenpaiProbEstimator(@_stats)
+    @_noChanges = (0 for _ in [0...4])
 
   respondToAction: (action) ->
 
@@ -151,6 +152,11 @@ class ManueAI extends AI
     else
       return false
 
+  # horaProb: P(hora | this dahai doesn't cause hoju)
+  # averageHoraPoints: Average hora points assuming I hora
+  # horaPointsDist: Distribution of hora points assuming I hora
+  # expectedHoraPoints: Expected hora points assuming this dahai doesn't cause hoju
+  # shanten: Shanten number
   getMetrics: (tehais, furos, candDahais, reachMode) ->
 
     analysis = new ShantenAnalysis(
@@ -158,7 +164,7 @@ class ManueAI extends AI
         {allowedExtraPais: 1})
 
     safeProbs = @getSafeProbs(candDahais, analysis)
-    hojuScoreChangesDists = @getHojuScoreChangesDists(candDahais)
+    immediateScoreChangesDists = @getImmediateScoreChangesDists(candDahais)
     metrics = @getHoraEstimation(candDahais, analysis, tehais, furos, reachMode)
 
     tenpaiRyukyokuAveragePoints = @getRyukyokuAveragePoints(true)
@@ -229,7 +235,8 @@ class ManueAI extends AI
         result += prob * points
     return result
 
-  getRyukyokuScoreChangesDist: (selfTenpai) ->
+  # Distribution of score changes assuming the kyoku ends with ryukyoku.
+  getScoreChangesDistOnRyukyoku: (selfTenpai) ->
     notenRyukyokuTenpaiProb = @getNotenRyukyokuTenpaiProb()
     tenpaisDist = new ProbDist([0, 0, 0, 0])
     for player in @game().players()
@@ -333,26 +340,27 @@ class ManueAI extends AI
         console.log(probInfos)
     return safeProbs
 
-  getHojuScoreChangesDists: (candDahais) ->
-    safeChanges = (0 for _ in [0...4])
+  # Distribution of score changes which happen immediately, for each possible dahai.
+  # i.e., If this dahai causes hoju, score changes due to the hoju. Otherwise [0, 0, 0, 0].
+  getImmediateScoreChangesDists: (candDahais) ->
     scoreChangesDists = {}
     for pai in candDahais
       key = (if pai then pai.toString() else "none")
-      scoreChangesDists[key] = new ProbDist(safeChanges)
-    for player in @game().players()
-      if player != @player()
-        scene = @_dangerEstimator.getScene(@game(), @player(), player)
-        tenpaiProb = @_tenpaiProbEstimator.estimate(player, @game())
+      scoreChangesDists[key] = new ProbDist(@_noChanges)
+    for horaPlayer in @game().players()
+      if horaPlayer != @player()
+        scene = @_dangerEstimator.getScene(@game(), @player(), horaPlayer)
+        tenpaiProb = @_tenpaiProbEstimator.estimate(horaPlayer, @game())
         probInfos = {}
         horaPointsFreqs = (
-            if player == @game().oya() then @_stats.oyaHoraPointsFreqs else @_stats.koHoraPointsFreqs)
+            if horaPlayer == @game().oya() then @_stats.oyaHoraPointsFreqs else @_stats.koHoraPointsFreqs)
         items = []
         for points, freq of horaPointsFreqs
           if points == "total" then continue
           items.push([parseInt(points), freq / horaPointsFreqs.total])
         horaPointsDist = new ProbDist(new HashMap(items))
         hojuChanges = (0 for _ in [0...4])
-        hojuChanges[player.id] = 1
+        hojuChanges[horaPlayer.id] = 1
         hojuChanges[@player().id] = -1
         for pai in candDahais
           key = (if pai then pai.toString() else "none")
@@ -367,10 +375,10 @@ class ManueAI extends AI
                 features2.push("#{feature.name} #{feature.value}")
               probInfo.features = features2
               hojuProb = tenpaiProb * probInfo.prob
-            unitDist = new ProbDist(new HashMap([[hojuChanges, hojuProb], [safeChanges, 1 - hojuProb]]))
+            unitDist = new ProbDist(new HashMap([[hojuChanges, hojuProb], [@_noChanges, 1 - hojuProb]]))
             # Considers only the first ron for double/triple ron to avoid too many combinations.
             scoreChangesDists[key] = scoreChangesDists[key].replace(
-                safeChanges,
+                @_noChanges,
                 ProbDist.mult(horaPointsDist, unitDist))
             probInfos[key] = probInfo
         console.log("danger")

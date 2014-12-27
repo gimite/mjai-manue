@@ -1,0 +1,6 @@
+今この打牌で振り込む -> unsafe, getImmediateScoreChangesDists
+今この打牌で振り込まない
+	今後自分が和了する -> safe, getScoreChangesDistOnHora
+	今後自分が和了しない
+		今後他家が和了する -> 未実装、確率0と仮定
+		流局する -> ryukyoku, getScoreChangesDistOnRyukyoku
