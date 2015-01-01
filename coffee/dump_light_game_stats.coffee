@@ -1,3 +1,7 @@
+# winProbsMap[kyoku,player1,player2][relScore]:
+#   Probability that player1 wins player2 in the end of the game assuming
+#   "player1 score - player2 score" is relScore at the beginning of the kyoku.
+
 fs = require("fs")
 glob = require("glob")
 printf = require("printf")

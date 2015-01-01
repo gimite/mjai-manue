@@ -1,4 +1,5 @@
 assert = require("assert")
+printf = require("printf")
 
 # NOTE: This doesn't work for objects because it distinguishes {a: 1, b: 2} and {b: 2, a: 1}.
 class HashMap
@@ -29,5 +30,11 @@ class HashMap
   forEach: (callback) ->
     for keyJson, value of @_data
       callback(JSON.parse(keyJson), value)
+
+  toString: ->
+    a = []
+    @forEach (k, v) =>
+      a.push(printf("%O: %O", k, v))
+    return printf("HashMap {%s}", a.join(", "))
 
 module.exports = HashMap

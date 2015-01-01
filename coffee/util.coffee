@@ -30,6 +30,14 @@ Util =
       if func(v) then ++n
     return n
 
+  mergeObjects: (lhs, rhs) ->
+    result = {}
+    for k, v of lhs
+      result[k] = v
+    for k, v of rhs
+      result[k] = v
+    return result
+
   camelCase: (name) ->
     return name.replace(/_(.)/g, (_, ch) -> ch.toUpperCase())
 

@@ -48,8 +48,12 @@ class ProbDist
     @_dist.forEach (v, p) =>
       a.push({v: v, p: p})
     a.sort((x, y) => y.p - x.p)
-    return printf("{\n%s}", (printf("  %O: %.3f,\n", x.v, x.p) for x in a).join(""))
+    return printf("ProbDist {\n%s}", (printf("  %O: %.3f,\n", x.v, x.p) for x in a).join(""))
 
+  inspect: ->
+    return @toString()
+
+# Returns probability distribution of sum of two random variables assuming these two are independent.
 ProbDist.add = (lhs, rhs) ->
   if lhs.constructor == ProbDist || rhs.constructor == ProbDist
     if lhs.constructor != ProbDist
@@ -70,6 +74,7 @@ ProbDist.add = (lhs, rhs) ->
   else
     throw new Error(printf("Unexpected types: %O, %O", lhs, rhs))
 
+# Returns probability distribution of product of two random variables assuming these two are independent.
 ProbDist.mult = (lhs, rhs) ->
   if lhs.constructor == ProbDist || rhs.constructor == ProbDist
     if lhs.constructor != ProbDist
@@ -89,6 +94,9 @@ ProbDist.mult = (lhs, rhs) ->
   else
     throw new Error(printf("Unexpected types: %O, %O", lhs, rhs))
 
+# merge([[probDist1, prob1], [probdist2, prob2], ...])
+# Returns a probability distribution of a random variable which follows probDist1 in prob1
+# and follows probDist2 in prob2 etc.
 ProbDist.merge = (items) ->
   dist = new HashMap()
   for [pd, prob] in items

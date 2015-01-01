@@ -1,3 +1,4 @@
+assert = require("assert")
 fs = require("fs")
 printf = require("printf")
 seedRandom = require("seed-random")
@@ -18,6 +19,8 @@ class ManueAI extends AI
 
   constructor: ->
     @_stats = JSON.parse(fs.readFileSync("../share/game_stats.json").toString("utf-8"))
+    @_stats = Util.mergeObjects(
+        @_stats, JSON.parse(fs.readFileSync("../share/light_game_stats.json").toString("utf-8")))
     @_dangerEstimator = new DangerEstimator()
     @_tenpaiProbEstimator = new TenpaiProbEstimator(@_stats)
     @_noChanges = (0 for _ in [0...4])
@@ -171,21 +174,38 @@ class ManueAI extends AI
     notenRyukyokuAveragePoints = @getRyukyokuAveragePoints(false)
     ryukyokuProb = @getRyukyokuProb()
 
+    scoreChangesDistOnRyukyokuIfTenpaiNow = @getScoreChangesDistOnRyukyoku(true)
+    scoreChangesDistOnRyukyokuIfNotenNow = @getScoreChangesDistOnRyukyoku(false)
+
     for pai in candDahais
       key = (if pai then pai.toString() else "none")
-      metric = metrics[key]
-      metric.safeProb = safeProbs[key]
-      metric.safeExpectedPoints = metric.safeProb * metric.expectedHoraPoints
-      metric.unsafeExpectedPoints = -(1 - metric.safeProb) * @_stats.averageHoraPoints
-      metric.ryukyokuProb = ryukyokuProb
-      if metric.shanten <= 0
-        metric.ryukyokuAveragePoints = tenpaiRyukyokuAveragePoints
+      m = metrics[key]
+      m.safeProb = safeProbs[key]
+      m.safeExpectedPoints = m.safeProb * m.expectedHoraPoints
+      m.unsafeExpectedPoints = -(1 - m.safeProb) * @_stats.averageHoraPoints
+      m.ryukyokuProb = ryukyokuProb
+      if m.shanten <= 0
+        m.ryukyokuAveragePoints = tenpaiRyukyokuAveragePoints
       else
-        metric.ryukyokuAveragePoints = notenRyukyokuAveragePoints
-      metric.ryukyokuExpectedPoints = metric.safeProb * ryukyokuProb * metric.ryukyokuAveragePoints
-      metric.expectedPoints =
-          metric.safeExpectedPoints + metric.unsafeExpectedPoints + metric.ryukyokuExpectedPoints
-      metric.scoreChangesDistOnHora = @getScoreChangesDistOnHora(metric)
+        m.ryukyokuAveragePoints = notenRyukyokuAveragePoints
+      m.ryukyokuExpectedPoints = m.safeProb * ryukyokuProb * m.ryukyokuAveragePoints
+      m.expectedPoints =
+          m.safeExpectedPoints + m.unsafeExpectedPoints + m.ryukyokuExpectedPoints
+      
+      m.immediateScoreChangesDist = immediateScoreChangesDists[key]
+      if m.shanten <= 0
+        m.scoreChangesDistOnRyukyoku = scoreChangesDistOnRyukyokuIfTenpaiNow
+      else
+        m.scoreChangesDistOnRyukyoku = scoreChangesDistOnRyukyokuIfNotenNow
+      m.scoreChangesDistOnHora = @getScoreChangesDistOnHora(m)
+
+      m.futureScoreChangesDist = ProbDist.merge([
+          [m.scoreChangesDistOnHora, m.horaProb],
+          [m.scoreChangesDistOnRyukyoku, 1 - m.horaProb],
+      ])
+      m.scoreChangesDist = m.immediateScoreChangesDist.replace(@_noChanges, m.futureScoreChangesDist)
+      m.averageRank = @getAverageRank(m.scoreChangesDist)
+
     return metrics
 
   getScoreChangesDistOnHora: (metric) ->
@@ -290,10 +310,10 @@ class ManueAI extends AI
       return
     @log(
         "| action | expPt | unsafeProb | horaProb | avgHoraPt | safeExpPt | unsafeExpPt " +
-        "| ryukyokuProb | ryukyokuAvgPt |  shanten |")
+        "| ryukyokuProb | ryukyokuAvgPt |  shanten | scDist | avgRank |")
     for [key, metric] in sortedMetrics
       @log(printf(
-          "| %-6s | %5d |      %.3f |    %.3f | %9d | %9d | %11d |        %.3f | %13d | %8O |",
+          "| %-6s | %5d |      %.3f |    %.3f | %9d | %9d | %11d |        %.3f | %13d | %8O | %6d |   %.3f |",
           key, 
           metric.expectedPoints, 
           1 - metric.safeProb, 
@@ -303,11 +323,9 @@ class ManueAI extends AI
           metric.unsafeExpectedPoints,
           metric.ryukyokuProb,
           metric.ryukyokuAveragePoints,
-          metric.shanten))
-      # console.log(key, "horaPoints", metric.horaPointsDist.toString(), metric.horaPointsDist.expected())
-      console.log(key, "scoreChangesOnHora",
-          metric.scoreChangesDistOnHora.toString(),
-          metric.scoreChangesDistOnHora.expected())
+          metric.shanten,
+          metric.scoreChangesDist.expected()[@player().id],
+          metric.averageRank))
     @log("")
 
   getSafeProbs: (candDahais, analysis) ->
@@ -709,6 +727,47 @@ class ManueAI extends AI
       else
         result.furos.push(action)
     return result
+
+  getAverageRank: (scoreChangesDist) ->
+    myId = @player().id
+    winsDist = new ProbDist([0, 0, 0, 0])
+    for other in @game().players()
+      if other == @player() then continue
+      winProb = @getWinProb(scoreChangesDist, other)
+      d = new ProbDist(new HashMap([
+          [[0, 0, 0, 0], 1 - winProb],
+          [((if i == other.id then 1 else 0) for i in [0...4]), winProb]
+      ]))
+      winsDist = ProbDist.add(winsDist, d)
+    rankDist = winsDist.mapValue (wins) =>
+      4 - (Util.count wins, (w) => w == 1)
+    return rankDist.expected()
+
+  getWinProb: (scoreChangesDist, other) ->
+    # TODO Change this considering renchan.
+    nextKyoku = Game.getNextKyoku(@game().bakaze(), @game().kyokuNum())
+    myId = @player().id
+    myPos = @game().getDistance(@player(), @game().chicha())
+    otherPos = @game().getDistance(other, @game().chicha())
+    key = printf("%s%d,%d,%d", nextKyoku.bakaze, nextKyoku.kyokuNum, myPos, otherPos)
+    winProbs = @_stats.winProbsMap[key]
+    relativeScoreDist = scoreChangesDist.mapValue (scoreChanges) =>
+      (@player().score + scoreChanges[myId]) - (other.score + scoreChanges[other.id])
+    winProb = 0
+    relativeScoreDist.dist().forEach (relativeScore, prob) =>
+      winProb += prob * @getWinProbFromRelativeScore(relativeScore, winProbs, myPos, otherPos)
+    return winProb
+
+  getWinProbFromRelativeScore: (relativeScore, winProbs, myPos, otherPos) ->
+    if winProbs && (relativeScore of winProbs)
+      return winProbs[relativeScore]
+    else
+      # abs(relativeScore) is so big that statistics are missing,
+      # or the current kyoku is S-4 (orasu).
+      if myPos < otherPos
+        return if relativeScore >= 0 then 1 else 0
+      else
+        return if relativeScore > 0 then 1 else 0
 
   setDangerEstimatorForTest: (estimator) ->
     @_dangerEstimator = estimator

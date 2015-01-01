@@ -5,6 +5,7 @@ Pai = require("./pai")
 Furo = require("./furo")
 Action = require("./action")
 Util = require("./util")
+ProbDist = require("./prob_dist")
 
 strToPids = (str) ->
   return (pai.id() for pai in Pai.strToPais(str))
@@ -143,3 +144,46 @@ dist = ai.getScoreChangesDistOnRyukyoku(true)
 Util.assertAlmostEqual(dist.dist().get([1500, 1500, -1500, -1500]), 0.3663)
 dist = ai.getScoreChangesDistOnRyukyoku(false)
 Util.assertAlmostEqual(dist.dist().get([1500, 1500, -1500, -1500]), 0.1446)
+
+game = new Game()
+state = Game.getDefaultStateForTest()
+me = state.players[1]
+game.setState(state)
+ai = new ManueAI()
+p = {
+  "-16000": 0.2,
+  "-8000": 0.4,
+  "0": 0.5,
+  "8000": 0.6,
+  "16000": 0.8,
+}
+ai.setStatsForTest({
+  "winProbsMap": {
+    "E2,1,0": p,
+    "E2,1,2": p,
+    "E2,1,3": p,
+  }
+})
+ai.initialize(game, me)
+Util.assertAlmostEqual(ai.getWinProb(new ProbDist([0, 0, 0, 0]), state.players[2]), 0.5)
+Util.assertAlmostEqual(ai.getWinProb(new ProbDist([0, 8000, -8000, 0]), state.players[2]), 0.8)
+Util.assertAlmostEqual(ai.getAverageRank(new ProbDist([0, 0, 0, 0])), 2.5)
+Util.assertAlmostEqual(
+    ai.getAverageRank(new ProbDist([0, 8000, -8000, 0])),
+    1 * 0.6*0.6*0.8 +
+    2 * (0.4*0.6*0.8 + 0.4*0.6*0.8 + 0.2*0.6*0.6) +
+    3 * (0.4*0.4*0.8 + 0.2*0.4*0.6 + 0.2*0.4*0.6) +
+    4 * 0.2*0.4*0.4)
+
+game = new Game()
+state = Game.getDefaultStateForTest()
+state.bakaze = new Pai("S")
+state.kyokuNum = 4
+me = state.players[1]
+game.setState(state)
+ai = new ManueAI()
+ai.initialize(game, me)
+Util.assertAlmostEqual(ai.getWinProb(new ProbDist([0, 0, 0, 0]), state.players[0]), 0)
+Util.assertAlmostEqual(ai.getWinProb(new ProbDist([0, 0, 0, 0]), state.players[2]), 1)
+Util.assertAlmostEqual(ai.getWinProb(new ProbDist([0, 8000, -8000, 0]), state.players[0]), 1)
+Util.assertAlmostEqual(ai.getWinProb(new ProbDist([0, 8000, -8000, 0]), state.players[2]), 1)

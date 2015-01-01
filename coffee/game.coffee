@@ -204,6 +204,12 @@ class Game
 Game.NUM_INITIAL_PIPAIS = Pai.NUM_IDS * 4 - 13 * 4 - 14
 Game.FINAL_TURN = Game.NUM_INITIAL_PIPAIS / 4
 
+Game.getNextKyoku = (bakaze, kyokuNum) ->
+  if kyokuNum == 4
+    return {bakaze: bakaze.nextForDora(), kyokuNum: 1}
+  else
+    return {bakaze: bakaze, kyokuNum: kyokuNum + 1}
+    
 Game.getDefaultStateForTest = ->
   players = []
   for i in [0...4]
@@ -217,6 +223,7 @@ Game.getDefaultStateForTest = ->
       reachState: "none",
       reachHoIndex: null,
       reachSutehaiIndex: null,
+      score: 25000,
     })
   return {
     players: players,
