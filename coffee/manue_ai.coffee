@@ -180,6 +180,7 @@ class ManueAI extends AI
     for pai in candDahais
       key = (if pai then pai.toString() else "none")
       m = metrics[key]
+      m.red = pai && pai.red()
       m.safeProb = safeProbs[key]
       m.safeExpectedPoints = m.safeProb * m.expectedHoraPoints
       m.unsafeExpectedPoints = -(1 - m.safeProb) * @_stats.averageHoraPoints
@@ -189,8 +190,6 @@ class ManueAI extends AI
       else
         m.ryukyokuAveragePoints = notenRyukyokuAveragePoints
       m.ryukyokuExpectedPoints = m.safeProb * ryukyokuProb * m.ryukyokuAveragePoints
-      m.expectedPoints =
-          m.safeExpectedPoints + m.unsafeExpectedPoints + m.ryukyokuExpectedPoints
       
       m.immediateScoreChangesDist = immediateScoreChangesDists[key]
       if m.shanten <= 0
@@ -204,6 +203,7 @@ class ManueAI extends AI
           [m.scoreChangesDistOnRyukyoku, 1 - m.horaProb],
       ])
       m.scoreChangesDist = m.immediateScoreChangesDist.replace(@_noChanges, m.futureScoreChangesDist)
+      m.expectedPoints = m.scoreChangesDist.expected()[@player().id]
       m.averageRank = @getAverageRank(m.scoreChangesDist)
 
     return metrics
@@ -294,18 +294,33 @@ class ManueAI extends AI
     return tenpaiFreq / (tenpaiFreq + notenFreq)
 
   chooseBestMetric: (metrics, preferBlack) ->
-    maxExpectedPoints = -1 / 0
     bestKey = null
+    bestMetric = null
     for key, metric of metrics
-      if metric.expectedPoints > maxExpectedPoints ||
-          (metric.expectedPoints == maxExpectedPoints && preferBlack && key + "r" == bestKey)
-        maxExpectedPoints = metric.expectedPoints
+      if !bestKey || @compareMetric(metric, bestMetric, preferBlack) < 0
         bestKey = key
+        bestMetric = metric
     return bestKey
+
+  compareMetric: (lhs, rhs, preferBlack) ->
+    if lhs.averageRank < rhs.averageRank
+      return -1
+    if lhs.averageRank > rhs.averageRank
+      return 1
+    if lhs.expectedPoints > rhs.expectedPoints
+      return -1
+    if lhs.expectedPoints < rhs.expectedPoints
+      return 1
+    if preferBlack
+      if !lhs.red && rhs.red
+        return -1
+      if lhs.red && !rhs.red
+        return 1
+    return 0
 
   printMetrics: (metrics) ->
     sortedMetrics = ([k, m] for k, m of metrics)
-    sortedMetrics.sort(([k1, m1], [k2, m2]) -> m2.expectedPoints - m1.expectedPoints)
+    sortedMetrics.sort(([k1, m1], [k2, m2]) => @compareMetric(m1, m2, true))
     if sortedMetrics.length == 0
       return
     @log(
@@ -354,8 +369,8 @@ class ManueAI extends AI
             probInfos[pai.toString()] = probInfo
           else
             safeProbs["none"] = 1
-        console.log("danger")
-        console.log(probInfos)
+        # console.log("danger")
+        # console.log(probInfos)
     return safeProbs
 
   # Distribution of score changes which happen immediately, for each possible dahai.
