@@ -64,4 +64,25 @@ Util =
   assertAlmostEqual: (actual, expected, error = 0.0001) ->
     assert.ok(Math.abs(actual - expected) <= error, printf("%O != %O", actual, expected))
 
+  formatObjectsAsTable: (objects, columns) ->
+    arrays = [c[0] for c in columns]
+    for object in objects
+      arrays.push(printf(c[2], object[c[1]]) for c in columns)
+    return Util.formatArraysAsTable(arrays)
+
+  formatArraysAsTable: (arrays) ->
+    widths = (0 for _ in [0...arrays[0].length])
+    for array in arrays
+      for i in [0...array.length]
+        widths[i] = Math.max(widths[i], array[i].length)
+    result = ""
+    for array in arrays
+      result += "| "
+      for i in [0...array.length]
+        w = widths[i]
+        result += printf("%+#{w}s | ", array[i])
+      result += "\n"
+    return result
+
+
 module.exports = Util

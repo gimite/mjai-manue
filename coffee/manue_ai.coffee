@@ -173,15 +173,19 @@ class ManueAI extends AI
     tenpaiRyukyokuAveragePoints = @getRyukyokuAveragePoints(true)
     notenRyukyokuAveragePoints = @getRyukyokuAveragePoints(false)
     ryukyokuProb = @getRyukyokuProb()
+    ryukyokuProbOnMyNoHora = @getRyukyokuProbOnMyNoHora()
 
     scoreChangesDistOnRyukyokuIfTenpaiNow = @getScoreChangesDistOnRyukyoku(true)
     scoreChangesDistOnRyukyokuIfNotenNow = @getScoreChangesDistOnRyukyoku(false)
+    scoreChangesDistsOnOtherHora =
+        (@getRandomHoraScoreChangesDist(p) for p in @game().players() when p != @player())
 
     for pai in candDahais
       key = (if pai then pai.toString() else "none")
       m = metrics[key]
       m.red = pai && pai.red()
       m.safeProb = safeProbs[key]
+      m.hojuProb = 1 - m.safeProb
       m.safeExpectedPoints = m.safeProb * m.expectedHoraPoints
       m.unsafeExpectedPoints = -(1 - m.safeProb) * @_stats.averageHoraPoints
       m.ryukyokuProb = ryukyokuProb
@@ -198,10 +202,18 @@ class ManueAI extends AI
         m.scoreChangesDistOnRyukyoku = scoreChangesDistOnRyukyokuIfNotenNow
       m.scoreChangesDistOnHora = @getScoreChangesDistOnHora(m)
 
-      m.futureScoreChangesDist = ProbDist.merge([
-          [m.scoreChangesDistOnHora, m.horaProb],
-          [m.scoreChangesDistOnRyukyoku, 1 - m.horaProb],
-      ])
+      m.ryukyokuProb = (1 - m.horaProb) * ryukyokuProbOnMyNoHora
+      m.othersHoraProb = (1 - m.horaProb) * (1 - ryukyokuProbOnMyNoHora)
+
+      myHoraItem = [m.scoreChangesDistOnHora, m.horaProb]
+      ryukyokuItem = [m.scoreChangesDistOnRyukyoku, m.ryukyokuProb]
+      otherHoraItems = ([d, m.othersHoraProb / 3] for d in scoreChangesDistsOnOtherHora)
+      # console.log("key = ", key)
+      # console.log("myHoraItem = ", myHoraItem)
+      # console.log("ryukyokuItem = ", ryukyokuItem)
+      # console.log("otherHoraItems = ", otherHoraItems)
+
+      m.futureScoreChangesDist = ProbDist.merge([myHoraItem, ryukyokuItem].concat(otherHoraItems))
       m.scoreChangesDist = m.immediateScoreChangesDist.replace(@_noChanges, m.futureScoreChangesDist)
       m.expectedPoints = m.scoreChangesDist.expected()[@player().id]
       m.averageRank = @getAverageRank(m.scoreChangesDist)
@@ -323,24 +335,19 @@ class ManueAI extends AI
     sortedMetrics.sort(([k1, m1], [k2, m2]) => @compareMetric(m1, m2, true))
     if sortedMetrics.length == 0
       return
-    @log(
-        "| action | expPt | unsafeProb | horaProb | avgHoraPt | safeExpPt | unsafeExpPt " +
-        "| ryukyokuProb | ryukyokuAvgPt |  shanten | scDist | avgRank |")
-    for [key, metric] in sortedMetrics
-      @log(printf(
-          "| %-6s | %5d |      %.3f |    %.3f | %9d | %9d | %11d |        %.3f | %13d | %8O | %6d |   %.3f |",
-          key, 
-          metric.expectedPoints, 
-          1 - metric.safeProb, 
-          metric.horaProb, 
-          metric.averageHoraPoints, 
-          metric.safeExpectedPoints, 
-          metric.unsafeExpectedPoints,
-          metric.ryukyokuProb,
-          metric.ryukyokuAveragePoints,
-          metric.shanten,
-          metric.scoreChangesDist.expected()[@player().id],
-          metric.averageRank))
+    columns = [
+      ["action", "key", "%s"],
+      ["avgRank", "averageRank", "%.4f"],
+      ["expPt", "expectedPoints", "%d"],
+      ["hojuProb", "hojuProb", "%.3f"],
+      ["myHoraProb", "horaProb", "%.3f"],
+      ["ryukyokuProb", "ryukyokuProb", "%.3f"],
+      ["otherHoraProb", "othersHoraProb", "%.3f"],
+      ["avgHoraPt", "averageHoraPoints", "%d"],
+      ["ryukyokuAvgPt", "ryukyokuAveragePoints", "%d"],
+      ["shanten", "shanten", "%d"],
+    ]
+    @log(Util.formatObjectsAsTable(Util.mergeObjects(m, {key: k}) for [k, m] in sortedMetrics, columns))
     @log("")
 
   getSafeProbs: (candDahais, analysis) ->
@@ -414,9 +421,55 @@ class ManueAI extends AI
                 @_noChanges,
                 ProbDist.mult(horaPointsDist, unitDist))
             probInfos[key] = probInfo
-        console.log("danger")
-        console.log(probInfos)
     return scoreChangesDists
+
+  getRyukyokuProbOnMyNoHora: ->
+    return Math.pow(@getRyukyokuProb(), 3 / 4)
+
+  getRandomHoraScoreChangesDist: (actor) ->
+
+    horaPointsFreqs = (
+        if actor == @game().oya() then @_stats.oyaHoraPointsFreqs else @_stats.koHoraPointsFreqs)
+    items = []
+    for points, freq of horaPointsFreqs
+      if points == "total" then continue
+      items.push([parseInt(points), freq / horaPointsFreqs.total])
+    horaPointsDist = new ProbDist(new HashMap(items))
+
+    return ProbDist.mult(horaPointsDist, @getHoraFactorsDist(actor))
+
+  getHoraFactorsDist: (actor) ->
+    tsumoHoraProb = @_stats.numTsumoHoras / @_stats.numHoras
+    m = new HashMap()
+    for target in @game().players()
+      prob = (if target == @player() then tsumoHoraProb else (1 - tsumoHoraProb) / 3)
+      m.set(@getHoraFactors(actor, target), prob)
+    return new ProbDist(m)
+
+  getHoraFactors: (actor, target) ->
+    if target == actor
+      if actor == @game().oya()
+        return (for p in @game().players()
+          if p == actor then 1 else -1 / 3
+        )
+      else
+        return (for p in @game().players()
+          if p == actor
+            1
+          else if p == @game().oya()
+            -1 / 2
+          else
+            -1 / 4
+        )
+    else
+      return (for p in @game().players()
+        if p == actor
+          1
+        else if p == target
+          -1
+        else
+          0
+      )
 
   getTenpaiProb: (player) ->
     if player.reachState != "none"

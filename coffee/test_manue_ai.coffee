@@ -187,3 +187,10 @@ Util.assertAlmostEqual(ai.getWinProb(new ProbDist([0, 0, 0, 0]), state.players[0
 Util.assertAlmostEqual(ai.getWinProb(new ProbDist([0, 0, 0, 0]), state.players[2]), 1)
 Util.assertAlmostEqual(ai.getWinProb(new ProbDist([0, 8000, -8000, 0]), state.players[0]), 1)
 Util.assertAlmostEqual(ai.getWinProb(new ProbDist([0, 8000, -8000, 0]), state.players[2]), 1)
+
+# game = new Game()
+# state = Game.getDefaultStateForTest()
+# me = state.players[1]
+# game.setState(state)
+# ai = new ManueAI()
+# ai.initialize(game, me)
