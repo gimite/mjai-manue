@@ -236,6 +236,6 @@ Game.getDefaultStateForTest = ->
     numPipais: Game.NUM_INITIAL_PIPAIS,
   }
 
-Util.attrReader(Game, ["players", "doraMarkers", "bakaze", "kyokuNum", "oya", "chicha", "numPipais"])
+Util.attrReader(Game, ["players", "doraMarkers", "bakaze", "kyokuNum", "honba", "oya", "chicha", "numPipais"])
 
 module.exports = Game

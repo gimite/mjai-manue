@@ -66,27 +66,7 @@ class ManueAI extends AI
     return @createAction(type: "none")
 
   decideDahai: (forbiddenDahais, reachDeclared, canReach) ->
-
-    candDahais = []
-    for pai in @player().tehais
-      if (Util.all candDahais, ((p) -> !p.equal(pai))) &&
-          (Util.all forbiddenDahais, ((p) -> !p.equal(pai)))
-        candDahais.push(pai)
-
-    metrics = {}
-    if canReach
-      nowMetrics = @getMetrics(@player().tehais, @player().furos, candDahais, "now")
-      nowMetrics = @selectTenpaiMetrics(nowMetrics)
-      @mergeMetrics(metrics, 0, nowMetrics)
-      neverMetrics = @getMetrics(@player().tehais, @player().furos, candDahais, "never")
-      @mergeMetrics(metrics, -1, neverMetrics)
-    else
-      defaultMetrics = @getMetrics(
-          @player().tehais, @player().furos, candDahais, if reachDeclared then "now" else "default")
-      if reachDeclared
-        defaultMetrics = @selectTenpaiMetrics(defaultMetrics)
-      @mergeMetrics(metrics, -1, defaultMetrics)
-
+    metrics = @getMetrics(forbiddenDahais, reachDeclared, canReach)
     @printMetrics(metrics)
     @printTenpaiProbs()
     key = @chooseBestMetric(metrics, true)
@@ -97,6 +77,29 @@ class ManueAI extends AI
       shanten: metrics[key].shanten,
       reach: parseInt(actionIdx) == 0,
     }
+
+  getMetrics: (forbiddenDahais, reachDeclared, canReach) ->
+
+    candDahais = []
+    for pai in @player().tehais
+      if (Util.all candDahais, ((p) -> !p.equal(pai))) &&
+          (Util.all forbiddenDahais, ((p) -> !p.equal(pai)))
+        candDahais.push(pai)
+
+    metrics = {}
+    if canReach
+      nowMetrics = @getMetricsInternal(@player().tehais, @player().furos, candDahais, "now")
+      nowMetrics = @selectTenpaiMetrics(nowMetrics)
+      @mergeMetrics(metrics, 0, nowMetrics)
+      neverMetrics = @getMetricsInternal(@player().tehais, @player().furos, candDahais, "never")
+      @mergeMetrics(metrics, -1, neverMetrics)
+    else
+      defaultMetrics = @getMetricsInternal(
+          @player().tehais, @player().furos, candDahais, if reachDeclared then "now" else "default")
+      if reachDeclared
+        defaultMetrics = @selectTenpaiMetrics(defaultMetrics)
+      @mergeMetrics(metrics, -1, defaultMetrics)
+    return metrics
 
   mergeMetrics: (metrics, prefix, otherMetrics) ->
     for key, metric of otherMetrics
@@ -113,7 +116,7 @@ class ManueAI extends AI
 
     metrics = {}
 
-    noneMetrics = @getMetrics(@player().tehais, @player().furos, [null], "default")
+    noneMetrics = @getMetricsInternal(@player().tehais, @player().furos, [null], "default")
     metrics["none"] = noneMetrics["none"]
 
     for j in [0...furoActions.length]
@@ -130,7 +133,7 @@ class ManueAI extends AI
       for pai in tehais
         if (Util.all candDahais, ((p) -> !p.equal(pai))) && !@isKuikae(action, pai)
           candDahais.push(pai)
-      furoMetrics = @getMetrics(tehais, furos, candDahais, "default")
+      furoMetrics = @getMetricsInternal(tehais, furos, candDahais, "default")
       @mergeMetrics(metrics, j, furoMetrics)
 
     @printMetrics(metrics)
@@ -160,7 +163,7 @@ class ManueAI extends AI
   # horaPointsDist: Distribution of hora points assuming I hora
   # expectedHoraPoints: Expected hora points assuming this dahai doesn't cause hoju
   # shanten: Shanten number
-  getMetrics: (tehais, furos, candDahais, reachMode) ->
+  getMetricsInternal: (tehais, furos, candDahais, reachMode) ->
 
     analysis = new ShantenAnalysis(
         pai.id() for pai in tehais,
