@@ -11,28 +11,28 @@ class Archive extends Game
     else
       @_paths = paths
 
-  playLight: (onAction, onEnd = null, i = 0) ->
-    @_buffer = ""
-    if i >= @_paths.length
-      if onEnd then onEnd()
-    else
-      console.error("#{i}/#{@_paths.length}")  # kari
-      stream = fs.createReadStream(@_paths[i])
+  playLight: (onAction) ->
+    for i in [0...@_paths.length]
+      if @_paths.length > 1
+        console.error("#{i}/#{@_paths.length}")  # kari
+      data = fs.readFileSync(@_paths[i])
       if @_paths[i].match(/\.gz$/)
-        stream = stream.pipe(zlib.createGunzip())
-      stream.on "data", (buf) =>
-        @_buffer += buf.toString("utf-8")
-      stream.on "end", =>
-        for line in @_buffer.split(/\n/)
-          if line
-            onAction(JSON.parse(line), this)
-        @playLight(onAction, onEnd, i + 1)
+        data = zlib.gunzipSync(data)
+      for line in data.toString("utf-8").split(/\n/)
+        if line
+          onAction(JSON.parse(line), this)
 
-  play: (onAction, onEnd) ->
+  play: (onAction) ->
     onLightAction = (lightAction) =>
       action = Action.fromPlain(lightAction, this)
       @updateState(action)
       onAction(action)
-    @playLight(onLightAction, onEnd)
+    @playLight(onLightAction)
+
+  getLightActions: ->
+    actins = []
+    @playLight (action) ->
+      actions.push(action)
+    return actions
 
 module.exports = Archive
