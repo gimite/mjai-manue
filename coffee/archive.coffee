@@ -30,7 +30,7 @@ class Archive extends Game
     @playLight(onLightAction)
 
   getLightActions: ->
-    actins = []
+    actions = []
     @playLight (action) ->
       actions.push(action)
     return actions

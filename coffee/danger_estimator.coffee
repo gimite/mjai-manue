@@ -257,8 +257,8 @@ class Scene
 
 class DangerEstimator
 
-  constructor: ->
-    @_root = JSON.parse(fs.readFileSync("../share/danger_tree.all.json").toString("utf-8"))
+  constructor: (baseDir) ->
+    @_root = JSON.parse(fs.readFileSync("#{baseDir}/share/danger_tree.all.json").toString("utf-8"))
 
   getScene: (game, me, target) ->
     return new Scene(game, me, target)

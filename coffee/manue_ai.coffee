@@ -17,11 +17,11 @@ Util = require("./util")
 
 class ManueAI extends AI
 
-  constructor: ->
-    @_stats = JSON.parse(fs.readFileSync("../share/game_stats.json").toString("utf-8"))
+  constructor: (baseDir = "..") ->
+    @_stats = JSON.parse(fs.readFileSync("#{baseDir}/share/game_stats.json").toString("utf-8"))
     @_stats = Util.mergeObjects(
-        @_stats, JSON.parse(fs.readFileSync("../share/light_game_stats.json").toString("utf-8")))
-    @_dangerEstimator = new DangerEstimator()
+        @_stats, JSON.parse(fs.readFileSync("#{baseDir}/share/light_game_stats.json").toString("utf-8")))
+    @_dangerEstimator = new DangerEstimator(baseDir)
     @_tenpaiProbEstimator = new TenpaiProbEstimator(@_stats)
     @_noChanges = (0 for _ in [0...4])
 
